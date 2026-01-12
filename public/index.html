@@ -31,6 +31,7 @@
     .neutral { background: #f0f0f0; }
     .toggle-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
     .toggle-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+    .toggle-row select { font-size: 16px; padding: 6px 8px; }
     .code-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
     .code-input-row input { flex: 0 0 min(320px, 90%); margin: 6px 0; }
     .text-input { width: min(320px, 90%); }
@@ -99,6 +100,7 @@
         <div class="codeBig" id="roomCodeBig">------</div>
         <div class="playerList" id="playerList"></div>
         <div class="playerList" id="pendingList"></div>
+        <div class="small muted" id="roomSettingsSummary"></div>
         <div id="hostControls" style="display:none; margin-top: 10px;">
           <button id="btnStartGame">Spiel starten</button>
         </div>
@@ -260,6 +262,13 @@
         "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
       }[m]));
     }
+    function getGameTypeLabel(value) {
+      return gameTypeLabels[value] || "Klassisch";
+    }
+    function getSelectedGameType() {
+      const select = document.getElementById("gameTypeSelect");
+      return select ? select.value : "classic";
+    }
 
     function isMyTurn() {
       return state && mySeat >= 0 && state.currentPlayer === mySeat;
@@ -375,6 +384,12 @@
       updateDeckelToggleState();
       updateGameTypeSelectState();
       updateLobbyVisibility();
+      const settingsSummary = document.getElementById("roomSettingsSummary");
+      if (settingsSummary && room?.settings) {
+        const typeLabel = getGameTypeLabel(room.settings.gameType);
+        const deckelLabel = room.settings.useDeckel ? "mit Deckeln" : "ohne Deckel";
+        settingsSummary.textContent = `Einstellungen: ${typeLabel} · ${deckelLabel}`;
+      }
       if (!room || room.status !== "lobby") {
         showLobbyExpiryNotice("");
       }
@@ -450,7 +465,12 @@
           showJoinStatus(`Beitritt für ${code} angefragt…`);
           joinPending = { code };
           document.getElementById("roomCode").value = code;
-          socket.emit("enter_room", { name, requestedCode: code, useDeckel: document.getElementById("deckelToggle").checked });
+          socket.emit("enter_room", {
+            name,
+            requestedCode: code,
+            useDeckel: document.getElementById("deckelToggle").checked,
+            gameType: getSelectedGameType()
+          });
         };
       });
     }
@@ -877,6 +897,7 @@
       const name = getPlayerName();
       const code = document.getElementById("roomCode").value.trim().toUpperCase();
       const useDeckel = document.getElementById("deckelToggle").checked;
+      const gameType = getSelectedGameType();
       if (!name) return showLobbyError("Bitte Name eingeben.");
       if (!canEnterRoom(code)) return;
       showLobbyError("");
@@ -886,7 +907,7 @@
       } else {
         showJoinStatus("Erstelle neue Lobby…");
       }
-      socket.emit("enter_room", { name, requestedCode: code, useDeckel });
+      socket.emit("enter_room", { name, requestedCode: code, useDeckel, gameType });
     };
 
     document.getElementById("btnStartGame").onclick = () => {
@@ -1002,6 +1023,18 @@
         gameType: event.target.value
       });
     };
+    document.getElementById("gameTypeSelect").onchange = (event) => {
+      if (!room || !myToken) return;
+      if (!isHost || room.status !== "lobby") {
+        event.target.value = room?.settings?.gameType || "classic";
+        return;
+      }
+      socket.emit("update_room_settings", {
+        code: room.code,
+        token: myToken,
+        gameType: event.target.value
+      });
+    };
 
     window.onload = () => {
       setSuggestedCode();
@@ -1072,6 +1105,14 @@
       if (!select) return;
       const current = room?.settings?.gameType || "schocken";
       select.value = current;
+      select.disabled = !!room && (!isHost || room.status !== "lobby");
+    }
+    function updateGameTypeState() {
+      const select = document.getElementById("gameTypeSelect");
+      if (!select) return;
+      if (room && room.status === "lobby") {
+        select.value = room.settings?.gameType || "classic";
+      }
       select.disabled = !!room && (!isHost || room.status !== "lobby");
     }
 

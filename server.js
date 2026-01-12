@@ -26,6 +26,8 @@ const LOBBY_WARNING_MS = 30 * 1000;
 const rooms = new Map(); // code -> room
 const ROOMS_FILE = "./rooms.json";
 const CODE_LENGTH = 5;
+const DEFAULT_GAME_TYPE = "classic";
+const GAME_TYPES = new Set(["classic", "quick"]);
 
 function makeCode(len = CODE_LENGTH) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -48,6 +50,11 @@ function makeToken() {
 }
 function rollDie() {
   return Math.floor(Math.random() * 6) + 1;
+}
+function normalizeGameType(value) {
+  const candidate = String(value || "").trim().toLowerCase();
+  if (GAME_TYPES.has(candidate)) return candidate;
+  return DEFAULT_GAME_TYPE;
 }
 
 // ---- Game State ----
@@ -598,7 +605,7 @@ function tryReconnectByName({ room, socket, name }) {
   return true;
 }
 
-function createRoom({ socket, name, useDeckel, requestedCode }) {
+function createRoom({ socket, name, useDeckel, gameType, requestedCode }) {
   let code;
   const normalizedRequested = normalizeCode(requestedCode);
   if (normalizedRequested) {
@@ -681,6 +688,10 @@ async function loadRooms() {
     data.forEach(room => {
       const normalizedCode = normalizeCode(room.code);
       if (!normalizedCode) return;
+      const settings = {
+        useDeckel: !!room.settings?.useDeckel,
+        gameType: normalizeGameType(room.settings?.gameType)
+      };
       rooms.set(normalizedCode, {
         ...room,
         code: normalizedCode,
@@ -719,17 +730,17 @@ io.on("connection", (socket) => {
     socket.emit("lobby_list", { lobbies: getLobbyList() });
   });
 
-  socket.on("create_room", ({ name, useDeckel, requestedCode }) => {
+  socket.on("create_room", ({ name, useDeckel, gameType, requestedCode }) => {
     if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
-    createRoom({ socket, name: cleanName, useDeckel, requestedCode });
+    createRoom({ socket, name: cleanName, useDeckel, gameType, requestedCode });
   });
 
   socket.on("request_join", ({ code, name }) => {
     handleJoinRequest(socket, { code, name });
   });
 
-  socket.on("enter_room", ({ name, requestedCode, useDeckel }) => {
+  socket.on("enter_room", ({ name, requestedCode, useDeckel, gameType }) => {
     if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
     const normalized = normalizeCode(requestedCode);
@@ -740,7 +751,7 @@ io.on("connection", (socket) => {
         return handleJoinRequest(socket, { code: normalized, name: cleanName });
       }
     }
-    createRoom({ socket, name: cleanName, useDeckel, requestedCode: normalized });
+    createRoom({ socket, name: cleanName, useDeckel, gameType, requestedCode: normalized });
   });
 
   socket.on("approve_join", ({ code, token, requestId, accept }) => {
