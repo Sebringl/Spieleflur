@@ -304,6 +304,70 @@ function safeRoom(room) {
   };
 }
 
+function getLobbyList() {
+  return [...rooms.values()]
+    .filter(room => room.status === "lobby")
+    .map(room => ({
+      code: room.code,
+      hostName: room.players[room.hostSeat]?.name || "Host",
+      playerCount: room.players.length,
+      useDeckel: !!room.settings.useDeckel
+    }));
+}
+
+function emitLobbyList() {
+  io.emit("lobby_list", { lobbies: getLobbyList() });
+}
+
+function pendingSummary(room) {
+  return (room.pendingRequests || []).map(req => ({
+    id: req.id,
+    name: req.name,
+    requestedAt: req.requestedAt
+  }));
+}
+
+function emitPendingRequests(room) {
+  const host = room.players[room.hostSeat];
+  if (host?.socketId) {
+    io.to(host.socketId).emit("join_requests_update", {
+      code: room.code,
+      requests: pendingSummary(room)
+    });
+  }
+}
+
+function handleJoinRequest(socket, { code, name }) {
+  const room = rooms.get(normalizeCode(code));
+  if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
+  if (room.status !== "lobby") return socket.emit("error_msg", { message: "Spiel läuft bereits." });
+
+  const cleanName = String(name || "").trim() || "Spieler";
+  if (room.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
+    return socket.emit("error_msg", { message: "Name ist schon vergeben. Bitte anderen Namen wählen." });
+  }
+  if ((room.pendingRequests || []).some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
+    return socket.emit("error_msg", { message: "Es gibt bereits eine Anfrage mit diesem Namen." });
+  }
+
+  if (!room.pendingRequests) room.pendingRequests = [];
+  room.pendingRequests = room.pendingRequests.filter(req => req.socketId !== socket.id);
+  const request = {
+    id: makeToken(),
+    name: cleanName,
+    socketId: socket.id,
+    requestedAt: Date.now()
+  };
+  room.pendingRequests.push(request);
+
+  socket.emit("join_pending", { code: room.code });
+  const host = room.players[room.hostSeat];
+  if (host?.socketId) {
+    io.to(host.socketId).emit("join_request_notice", { name: cleanName, code: room.code });
+  }
+  emitPendingRequests(room);
+}
+
 async function persistRooms() {
   const data = [...rooms.values()].map(room => ({
     code: room.code,
@@ -341,7 +405,8 @@ async function loadRooms() {
           ...p,
           connected: false,
           socketId: null
-        }))
+        })),
+        pendingRequests: []
       });
     });
   } catch (err) {
@@ -355,6 +420,12 @@ loadRooms();
 
 // ---- Socket.IO ----
 io.on("connection", (socket) => {
+  socket.emit("lobby_list", { lobbies: getLobbyList() });
+
+  socket.on("get_lobby_list", () => {
+    socket.emit("lobby_list", { lobbies: getLobbyList() });
+  });
+
   socket.on("create_room", ({ name, useDeckel, requestedCode }) => {
     const cleanName = String(name || "").trim() || "Spieler";
     let code;
@@ -381,6 +452,7 @@ io.on("connection", (socket) => {
       players: [
         { token, socketId: socket.id, name: cleanName, connected: true }
       ],
+      pendingRequests: [],
       state: null
     };
 
@@ -400,36 +472,81 @@ io.on("connection", (socket) => {
     });
 
     io.to(code).emit("room_update", safeRoom(room));
+    emitPendingRequests(room);
+    emitLobbyList();
   });
 
-  socket.on("join_room", ({ code, name }) => {
-    const room = rooms.get(normalizeCode(code));
-    if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
-    if (room.status !== "lobby") return socket.emit("error_msg", { message: "Spiel läuft bereits." });
+  socket.on("request_join", ({ code, name }) => {
+    handleJoinRequest(socket, { code, name });
+  });
 
-    const cleanName = String(name || "").trim() || "Spieler";
-    if (room.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
-      return socket.emit("error_msg", { message: "Name ist schon vergeben. Bitte anderen Namen wählen." });
+  socket.on("approve_join", ({ code, token, requestId, accept }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room) return;
+    if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann Beitritte bestätigen." });
+    if (!room.pendingRequests) room.pendingRequests = [];
+
+    const idx = room.pendingRequests.findIndex(req => req.id === requestId);
+    if (idx < 0) return socket.emit("error_msg", { message: "Anfrage nicht gefunden." });
+
+    const request = room.pendingRequests[idx];
+    room.pendingRequests.splice(idx, 1);
+
+    const targetSocket = io.sockets.sockets.get(request.socketId);
+    if (!accept) {
+      if (targetSocket) {
+        targetSocket.emit("join_denied", { message: "Host hat den Beitritt abgelehnt." });
+      }
+      emitPendingRequests(room);
+      return;
     }
 
-    const token = makeToken();
+    if (room.status !== "lobby") {
+      if (targetSocket) targetSocket.emit("join_denied", { message: "Spiel läuft bereits." });
+      emitPendingRequests(room);
+      return;
+    }
+
+    if (room.players.some(p => p.name.toLowerCase() === request.name.toLowerCase())) {
+      if (targetSocket) targetSocket.emit("join_denied", { message: "Name ist schon vergeben. Bitte anderen Namen wählen." });
+      emitPendingRequests(room);
+      return;
+    }
+
+    if (!targetSocket) {
+      socket.emit("error_msg", { message: "Spieler ist nicht mehr verbunden." });
+      emitPendingRequests(room);
+      return;
+    }
+
+    const newToken = makeToken();
     const seatIndex = room.players.length;
-    room.players.push({ token, socketId: socket.id, name: cleanName, connected: true });
+    room.players.push({
+      token: newToken,
+      socketId: request.socketId,
+      name: request.name,
+      connected: true
+    });
 
-    socket.join(room.code);
-
-    socket.emit("room_joined", {
+    targetSocket.join(room.code);
+    targetSocket.emit("room_joined", {
       code: room.code,
-      token,
+      token: newToken,
       seatIndex,
-      name: cleanName,
+      name: request.name,
       isHost: false,
       room: safeRoom(room),
       state: room.state
     });
 
     io.to(room.code).emit("room_update", safeRoom(room));
+    emitPendingRequests(room);
+    emitLobbyList();
     persistRooms();
+  });
+
+  socket.on("join_room", ({ code, name }) => {
+    handleJoinRequest(socket, { code, name });
   });
 
   socket.on("rejoin_room", ({ code, token }) => {
@@ -457,6 +574,7 @@ io.on("connection", (socket) => {
 
     io.to(room.code).emit("room_update", safeRoom(room));
     if (room.state) io.to(room.code).emit("state_update", room.state);
+    if (token === room.hostToken) emitPendingRequests(room);
     persistRooms();
   });
 
@@ -470,6 +588,21 @@ io.on("connection", (socket) => {
 
     io.to(room.code).emit("room_update", safeRoom(room));
     io.to(room.code).emit("state_update", room.state);
+    emitLobbyList();
+    persistRooms();
+  });
+
+  socket.on("return_lobby", ({ code, token }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room) return;
+    if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann alle zurück in die Lobby schicken." });
+
+    room.status = "lobby";
+    room.state = null;
+    io.to(room.code).emit("lobby_returned", { message: "Zurück in der Lobby." });
+    io.to(room.code).emit("room_update", safeRoom(room));
+    emitPendingRequests(room);
+    emitLobbyList();
     persistRooms();
   });
 
@@ -587,12 +720,20 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     for (const room of rooms.values()) {
+      if (room.pendingRequests) {
+        const pendingBefore = room.pendingRequests.length;
+        room.pendingRequests = room.pendingRequests.filter(req => req.socketId !== socket.id);
+        if (room.pendingRequests.length !== pendingBefore) {
+          emitPendingRequests(room);
+        }
+      }
       const seat = room.players.findIndex(p => p.socketId === socket.id);
       if (seat >= 0) {
         room.players[seat].connected = false;
         room.players[seat].socketId = null;
         io.to(room.code).emit("room_update", safeRoom(room));
         persistRooms();
+        emitLobbyList();
       }
     }
   });
