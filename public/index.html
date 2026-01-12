@@ -44,12 +44,10 @@
   </style>
 </head>
 <body>
-  <h1>Schocken (Multiplayer)</h1>
+  <h1>Schocken (Lobby)</h1>
 
   <div id="lobby">
     <div id="lobbyCard">
-      <h2>Lobby</h2>
-
       <hr />
       <div id="rejoinBox" style="display:none;">
         <h3>Wieder beitreten</h3>
@@ -71,28 +69,15 @@
       <button id="btnEnter" class="centered">Los!</button>
       <div id="joinStatus" class="small muted"></div>
 
-      <div class="lobby-list" id="activeLobbies">
-        <div class="small muted">Aktive Lobbys werden geladen…</div>
-      </div>
-
       <hr />
       <label class="toggle-row">
         <input type="checkbox" id="deckelToggle" />
         <span>Mit Deckeln spielen (nur beim Erstellen)</span>
       </label>
 
-      <hr />
-      <h3>Spiel beitreten oder erstellen</h3>
-      <div class="small">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
-      <input id="playerName" class="text-input centered" type="text" placeholder="Dein Name" />
-      <div class="code-input-row">
-        <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" />
-        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
-          <span>🔄</span>
-        </button>
+      <div class="lobby-list" id="activeLobbies">
+        <div class="small muted">Aktive Lobbys werden geladen…</div>
       </div>
-      <button id="btnEnter" class="centered">Los!</button>
-      <div id="joinStatus" class="small muted"></div>
 
       <hr />
       <div id="roomView" style="display:none;">
@@ -170,6 +155,16 @@
     }
     function showJoinStatus(msg) {
       document.getElementById("joinStatus").textContent = msg || "";
+    }
+    function canEnterRoom(requestedCode) {
+      if (myRoomCode && myToken) {
+        const normalized = String(requestedCode || "").trim().toUpperCase();
+        if (!normalized || normalized !== myRoomCode) {
+          showLobbyError("Du bist bereits in einer Lobby. Bitte wieder beitreten.");
+          return false;
+        }
+      }
+      return true;
     }
     function showGameMessage(msg, isError=false) {
       const el = document.getElementById("result");
@@ -352,6 +347,7 @@
           const name = getPlayerName();
           const code = btn.dataset.join;
           if (!name) return showLobbyError("Bitte Name eingeben.");
+          if (!canEnterRoom(code)) return;
           showLobbyError("");
           showJoinStatus(`Beitritt für ${code} angefragt…`);
           joinPending = { code };
@@ -603,6 +599,7 @@
       const code = document.getElementById("roomCode").value.trim().toUpperCase();
       const useDeckel = document.getElementById("deckelToggle").checked;
       if (!name) return showLobbyError("Bitte Name eingeben.");
+      if (!canEnterRoom(code)) return;
       showLobbyError("");
       if (code) {
         showJoinStatus(`Beitritt für ${code} angefragt…`);

@@ -320,6 +320,25 @@ function emitLobbyList() {
   io.emit("lobby_list", { lobbies: getLobbyList() });
 }
 
+function getSocketRoom(socket) {
+  const code = normalizeCode(socket.data?.roomCode);
+  if (!code) return null;
+  const room = rooms.get(code);
+  if (!room) {
+    socket.data.roomCode = null;
+    return null;
+  }
+  return room;
+}
+
+function blockIfAlreadyInRoom(socket) {
+  if (getSocketRoom(socket)) {
+    socket.emit("error_msg", { message: "Du bist bereits in einer Lobby. Bitte wieder beitreten." });
+    return true;
+  }
+  return false;
+}
+
 function pendingSummary(room) {
   return (room.pendingRequests || []).map(req => ({
     id: req.id,
@@ -369,6 +388,41 @@ function handleJoinRequest(socket, { code, name }) {
   emitPendingRequests(room);
 }
 
+function tryReconnectByName({ room, socket, name }) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return false;
+  const seatIndex = room.players.findIndex(
+    p => p.name.toLowerCase() === cleanName.toLowerCase() && !p.connected
+  );
+  if (seatIndex < 0) return false;
+
+  const player = room.players[seatIndex];
+  player.socketId = socket.id;
+  player.connected = true;
+  if (room.pendingRequests) {
+    room.pendingRequests = room.pendingRequests.filter(req => req.name.toLowerCase() !== cleanName.toLowerCase());
+  }
+
+  socket.join(room.code);
+  socket.data.roomCode = room.code;
+  socket.emit("room_joined", {
+    code: room.code,
+    token: player.token,
+    seatIndex,
+    name: player.name,
+    isHost: player.token === room.hostToken,
+    room: safeRoom(room),
+    state: room.state
+  });
+
+  io.to(room.code).emit("room_update", safeRoom(room));
+  if (room.state) io.to(room.code).emit("state_update", room.state);
+  if (player.token === room.hostToken) emitPendingRequests(room);
+  emitLobbyList();
+  persistRooms();
+  return true;
+}
+
 function createRoom({ socket, name, useDeckel, requestedCode }) {
   let code;
   const normalizedRequested = normalizeCode(requestedCode);
@@ -400,6 +454,7 @@ function createRoom({ socket, name, useDeckel, requestedCode }) {
 
   rooms.set(code, room);
   socket.join(code);
+  socket.data.roomCode = code;
 
   persistRooms();
 
@@ -477,6 +532,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("create_room", ({ name, useDeckel, requestedCode }) => {
+    if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
     createRoom({ socket, name: cleanName, useDeckel, requestedCode });
   });
@@ -486,11 +542,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("enter_room", ({ name, requestedCode, useDeckel }) => {
+    if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
     const normalized = normalizeCode(requestedCode);
     if (normalized) {
       const room = rooms.get(normalized);
       if (room) {
+        if (tryReconnectByName({ room, socket, name: cleanName })) return;
         return handleJoinRequest(socket, { code: normalized, name: cleanName });
       }
     }
@@ -546,6 +604,7 @@ io.on("connection", (socket) => {
     });
 
     targetSocket.join(room.code);
+    targetSocket.data.roomCode = room.code;
     targetSocket.emit("room_joined", {
       code: room.code,
       token: newToken,
@@ -578,6 +637,7 @@ io.on("connection", (socket) => {
     player.connected = true;
 
     socket.join(room.code);
+    socket.data.roomCode = room.code;
 
     socket.emit("room_joined", {
       code: room.code,
