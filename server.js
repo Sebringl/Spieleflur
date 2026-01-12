@@ -469,33 +469,6 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
-  socket.on("return_lobby", ({ code, token }) => {
-    const room = rooms.get(normalizeCode(code));
-    if (!room) return;
-    if (room.hostToken !== token) {
-      return socket.emit("error_msg", { message: "Nur der Host kann alle zurück in die Lobby schicken." });
-    }
-
-    room.status = "lobby";
-    room.state = null;
-
-    io.to(room.code).emit("room_update", safeRoom(room));
-    io.to(room.code).emit("lobby_returned", { message: "Host hat die Runde beendet. Zurück in der Lobby." });
-    persistRooms();
-  });
-
-  socket.on("host_rotate_player", ({ code, token }) => {
-    const room = rooms.get(normalizeCode(code));
-    if (!room || room.status !== "running") return;
-    if (room.hostToken !== token) {
-      return socket.emit("error_msg", { message: "Nur der Host kann den nächsten Spieler wählen." });
-    }
-
-    rotateCurrentPlayer(room.state);
-    io.to(room.code).emit("state_update", room.state);
-    persistRooms();
-  });
-
   socket.on("action_roll", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;

@@ -31,11 +31,6 @@
     .code-input-row input { flex: 1 1 220px; margin: 6px 0; }
     .icon-btn { width: 46px; height: 46px; border-radius: 10px; font-size: 20px; padding: 0; margin: 6px 0; }
     .icon-btn span { display: inline-block; transform: rotate(0deg); }
-    .inline-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .inline-fields input { flex: 1 1 200px; margin: 6px 0; }
-    .turn-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
-    .turn-row h2 { margin-bottom: 0; }
-    .turn-row .icon-btn { width: 42px; height: 42px; font-size: 18px; }
   </style>
 </head>
 <body>
@@ -48,14 +43,12 @@
 
       <hr />
       <h3>Neues Spiel erstellen (Host)</h3>
-      <div class="inline-fields">
-        <input id="hostName" type="text" placeholder="Dein Name" />
-        <div class="code-input-row">
-          <input id="hostCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
-          <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
-            <span>🔄</span>
-          </button>
-        </div>
+      <input id="hostName" type="text" placeholder="Dein Name" />
+      <div class="code-input-row">
+        <input id="hostCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
+        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
+          <span>🔄</span>
+        </button>
       </div>
       <label class="toggle-row">
         <input type="checkbox" id="deckelToggle" />
@@ -188,8 +181,8 @@
           const reg = await navigator.serviceWorker.ready;
           await reg.showNotification(title, {
             body,
-            icon: "/icon.png",
-            badge: "/icon.png"
+            icon: "/icon.svg",
+            badge: "/icon.svg"
           });
           return;
         } catch (err) {
@@ -475,11 +468,6 @@
 
     document.getElementById("btnNewCode").onclick = () => {
       setSuggestedCode();
-    };
-
-    document.getElementById("btnRotatePlayer").onclick = () => {
-      if (!isHost || !room || !myToken) return;
-      socket.emit("host_rotate_player", { code: room.code, token: myToken });
     };
 
     window.onload = () => {
