@@ -30,9 +30,15 @@
     .toggle-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
     .toggle-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
     .code-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
-    .code-input-row input { flex: 1 1 220px; margin: 6px 0; }
+    .code-input-row input { flex: 0 0 min(320px, 90%); margin: 6px 0; }
+    .text-input { width: min(320px, 90%); }
     .icon-btn { width: 46px; height: 46px; border-radius: 10px; font-size: 20px; padding: 0; margin: 6px 0; }
     .icon-btn span { display: inline-block; transform: rotate(0deg); }
+    .lobby-list { text-align: left; max-width: 420px; margin: 10px auto; }
+    .lobby-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #eee; border-radius: 10px; padding: 10px; margin: 8px 0; }
+    .lobby-item button { width: auto; min-width: 140px; height: 44px; font-size: 16px; margin: 0; }
+    .muted { opacity: 0.7; }
+    .centered { display: block; margin-left: auto; margin-right: auto; }
     footer { margin-top: 24px; font-size: 14px; color: #555; }
     .impressum-link { display: inline-block; margin-top: 20px; font-size: 14px; color: #555; }
   </style>
@@ -43,28 +49,6 @@
   <div id="lobby">
     <div id="lobbyCard">
       <h2>Lobby</h2>
-      <div class="small">Host erstellt Spiel → Code → alle anderen joinen mit Code.</div>
-
-      <hr />
-      <h3>Neues Spiel erstellen (Host)</h3>
-      <input id="hostName" type="text" placeholder="Dein Name" />
-      <div class="code-input-row">
-        <input id="hostCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
-        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
-          <span>🔄</span>
-        </button>
-      </div>
-      <label class="toggle-row">
-        <input type="checkbox" id="deckelToggle" />
-        <span>Mit Deckeln spielen</span>
-      </label>
-      <button id="btnCreate">Neues Spiel erstellen</button>
-
-      <hr />
-      <h3>Spiel beitreten</h3>
-      <input id="joinName" type="text" placeholder="Dein Name" />
-      <input id="joinCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
-      <button id="btnJoin">Beitreten</button>
 
       <hr />
       <div id="rejoinBox" style="display:none;">
@@ -75,14 +59,38 @@
       </div>
 
       <hr />
+      <h3>Spiel beitreten oder erstellen</h3>
+      <div class="small">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
+      <input id="playerName" class="text-input centered" type="text" placeholder="Dein Name" />
+      <div class="code-input-row">
+        <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" />
+        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
+          <span>🔄</span>
+        </button>
+      </div>
+      <button id="btnEnter" class="centered">Los!</button>
+      <div id="joinStatus" class="small muted"></div>
+
+      <div class="lobby-list" id="activeLobbies">
+        <div class="small muted">Aktive Lobbys werden geladen…</div>
+      </div>
+
+      <hr />
+      <label class="toggle-row">
+        <input type="checkbox" id="deckelToggle" />
+        <span>Mit Deckeln spielen (nur beim Erstellen)</span>
+      </label>
+
+      <hr />
       <div id="roomView" style="display:none;">
         <h3>Room</h3>
         <div class="codeBig" id="roomCodeBig">------</div>
         <div class="playerList" id="playerList"></div>
+        <div class="playerList" id="pendingList"></div>
         <div id="hostControls" style="display:none; margin-top: 10px;">
           <button id="btnStartGame">Spiel starten</button>
-          <div class="small">Nur der Host kann starten.</div>
         </div>
+        <div class="small" id="hostStartHint">Nur der Host kann das Spiel starten.</div>
       </div>
 
       <div id="lobbyError" style="color:red; margin-top: 10px;"></div>
@@ -93,6 +101,7 @@
     <div class="turn-row">
       <h2 id="playerDisplay">Am Zug: -</h2>
       <button id="btnRotatePlayer" class="icon-btn" title="Nächster Spieler" aria-label="Nächster Spieler">⟳</button>
+      <button id="btnReload" class="icon-btn" title="Neu laden" aria-label="Neu laden">🔄</button>
     </div>
     <div class="small" id="turnHint"></div>
 
@@ -112,6 +121,7 @@
 
     <div style="margin-top: 14px;">
       <button id="btnBackToLobby">Zurück zur Lobby</button>
+      <div class="small">Beendet das Spiel und löscht den Fortschritt.</div>
     </div>
   </div>
 
@@ -133,6 +143,7 @@
     let myName     = localStorage.getItem("schocken_name") || "";
     let isHost     = false;
     let wasMyTurn  = false;
+    let joinPending = null;
 
     let room = null;
     let state = null;
@@ -144,19 +155,25 @@
     function showLobbyError(msg) {
       document.getElementById("lobbyError").textContent = msg || "";
     }
+    function showJoinStatus(msg) {
+      document.getElementById("joinStatus").textContent = msg || "";
+    }
     function showGameMessage(msg, isError=false) {
       const el = document.getElementById("result");
       el.textContent = msg || "";
       el.style.color = isError ? "red" : "black";
     }
-    function makeCode(len = 6) {
+    function makeCode(len = 5) {
       const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
       let s = "";
       for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
       return s;
     }
     function setSuggestedCode() {
-      document.getElementById("hostCode").value = makeCode();
+      document.getElementById("roomCode").value = makeCode();
+    }
+    function getPlayerName() {
+      return document.getElementById("playerName").value.trim();
     }
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, m => ({
@@ -205,6 +222,43 @@
       }
     }
 
+    async function notifyJoinRequest(playerName, code) {
+      if (!("Notification" in window)) return;
+      if (Notification.permission === "denied") return;
+
+      if (Notification.permission === "default") {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") return;
+        } catch (err) {
+          return;
+        }
+      }
+
+      const title = "Beitrittsanfrage";
+      const body = `${playerName} möchte Lobby ${code} beitreten.`;
+
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification(title, {
+            body,
+            icon: "/icon.png",
+            badge: "/icon.png"
+          });
+          return;
+        } catch (err) {
+          // fall back to window notification
+        }
+      }
+
+      try {
+        new Notification(title, { body });
+      } catch (err) {
+        // ignore
+      }
+    }
+
     function renderRoomView() {
       if (!room) return;
       document.getElementById("roomView").style.display = "block";
@@ -220,6 +274,78 @@
       document.getElementById("playerList").innerHTML = html;
 
       document.getElementById("hostControls").style.display = isHost ? "block" : "none";
+      const hint = document.getElementById("hostStartHint");
+      if (hint) {
+        hint.textContent = isHost ? "Nur du kannst das Spiel starten." : "Nur der Host kann das Spiel starten.";
+      }
+      renderPendingList([]);
+    }
+
+    function renderPendingList(requests) {
+      const container = document.getElementById("pendingList");
+      if (!isHost) {
+        container.innerHTML = "";
+        return;
+      }
+      if (!requests || requests.length === 0) {
+        container.innerHTML = "<h4>Beitrittsanfragen</h4><div class='small muted'>Keine offenen Anfragen.</div>";
+        return;
+      }
+      let html = "<h4>Beitrittsanfragen</h4><ul>";
+      requests.forEach(req => {
+        const safeName = escapeHtml(req.name);
+        html += `<li>${safeName}
+          <button class="icon-btn" data-approve="${req.id}" title="Annehmen">✅</button>
+          <button class="icon-btn" data-deny="${req.id}" title="Ablehnen">❌</button>
+        </li>`;
+      });
+      html += "</ul>";
+      container.innerHTML = html;
+
+      container.querySelectorAll("button[data-approve]").forEach(btn => {
+        btn.onclick = () => {
+          if (!room || !myToken) return;
+          socket.emit("approve_join", { code: room.code, token: myToken, requestId: btn.dataset.approve, accept: true });
+        };
+      });
+      container.querySelectorAll("button[data-deny]").forEach(btn => {
+        btn.onclick = () => {
+          if (!room || !myToken) return;
+          socket.emit("approve_join", { code: room.code, token: myToken, requestId: btn.dataset.deny, accept: false });
+        };
+      });
+    }
+
+    function renderLobbyList(lobbies) {
+      const container = document.getElementById("activeLobbies");
+      if (!lobbies || lobbies.length === 0) {
+        container.innerHTML = "<div class='small muted'>Keine aktiven Lobbys gefunden.</div>";
+        return;
+      }
+      let html = "<h4>Aktive Lobbys</h4>";
+      lobbies.forEach(lobby => {
+        const host = escapeHtml(lobby.hostName || "Host");
+        html += `<div class="lobby-item">
+          <div>
+            <div><strong>${lobby.code}</strong> · ${host}</div>
+            <div class="small muted">${lobby.playerCount} Spieler · ${lobby.useDeckel ? "mit Deckeln" : "ohne Deckel"}</div>
+          </div>
+          <button data-join="${lobby.code}">Beitreten</button>
+        </div>`;
+      });
+      container.innerHTML = html;
+      container.querySelectorAll("button[data-join]").forEach(btn => {
+        btn.onclick = () => {
+          const name = getPlayerName();
+          const code = btn.dataset.join;
+          if (!name) return showLobbyError("Bitte Name eingeben.");
+          showLobbyError("");
+          showJoinStatus(`Beitritt für ${code} angefragt…`);
+          joinPending = { code };
+          document.getElementById("roomCode").value = code;
+          socket.emit("enter_room", { name, requestedCode: code, useDeckel: document.getElementById("deckelToggle").checked });
+        };
+      });
     }
 
     function getRoundBestPlayerIndex(round) {
@@ -363,12 +489,15 @@
     // ---- Socket events ----
     socket.on("room_joined", (payload) => {
       showLobbyError("");
+      showJoinStatus("");
+      joinPending = null;
 
       myRoomCode = payload.code;
       myToken = payload.token;
       mySeat = payload.seatIndex;
       myName = payload.name;
       isHost = payload.isHost;
+      document.getElementById("playerName").value = myName;
 
       localStorage.setItem("schocken_code", myRoomCode);
       localStorage.setItem("schocken_token", myToken);
@@ -394,6 +523,29 @@
       renderRoomView();
     });
 
+    socket.on("lobby_list", (payload) => {
+      renderLobbyList(payload.lobbies || []);
+    });
+
+    socket.on("join_pending", ({ code }) => {
+      joinPending = { code };
+      showJoinStatus(`Warte auf Bestätigung durch den Host (${code}).`);
+    });
+
+    socket.on("join_denied", ({ message }) => {
+      joinPending = null;
+      showJoinStatus("");
+      showLobbyError(message || "Beitritt abgelehnt.");
+    });
+
+    socket.on("join_requests_update", ({ requests }) => {
+      renderPendingList(requests);
+    });
+
+    socket.on("join_request_notice", ({ name, code }) => {
+      notifyJoinRequest(name, code);
+    });
+
     socket.on("state_update", (payloadState) => {
       state = payloadState;
       setView("game");
@@ -402,6 +554,12 @@
     });
 
     socket.on("error_msg", ({ message }) => {
+      const hadJoinPending = !!joinPending;
+      showJoinStatus("");
+      joinPending = null;
+      if (message === "Room-Code nicht gefunden.") {
+        socket.emit("get_lobby_list");
+      }
       if (message === "Room-Code nicht gefunden." && myRoomCode && myToken) {
         localStorage.removeItem("schocken_code");
         localStorage.removeItem("schocken_token");
@@ -409,7 +567,13 @@
         myRoomCode = null; myToken = null; mySeat = -1;
         document.getElementById("rejoinBox").style.display = "none";
       }
-      if (document.getElementById("lobby").style.display !== "none") showLobbyError(message);
+      if (document.getElementById("lobby").style.display !== "none") {
+        if (message === "Room-Code nicht gefunden." && hadJoinPending) {
+          showLobbyError("Lobby existiert nicht mehr.");
+        } else {
+          showLobbyError(message);
+        }
+      }
       else showGameMessage(message, true);
     });
 
@@ -421,20 +585,19 @@
     });
 
     // ---- Buttons ----
-    document.getElementById("btnCreate").onclick = () => {
-      const name = document.getElementById("hostName").value.trim();
+    document.getElementById("btnEnter").onclick = () => {
+      const name = getPlayerName();
+      const code = document.getElementById("roomCode").value.trim().toUpperCase();
       const useDeckel = document.getElementById("deckelToggle").checked;
-      const requestedCode = document.getElementById("hostCode").value.trim().toUpperCase();
       if (!name) return showLobbyError("Bitte Name eingeben.");
-      socket.emit("create_room", { name, useDeckel, requestedCode });
-    };
-
-    document.getElementById("btnJoin").onclick = () => {
-      const name = document.getElementById("joinName").value.trim();
-      const code = document.getElementById("joinCode").value.trim().toUpperCase();
-      if (!name) return showLobbyError("Bitte Name eingeben.");
-      if (!code) return showLobbyError("Bitte Room-Code eingeben.");
-      socket.emit("join_room", { name, code });
+      showLobbyError("");
+      if (code) {
+        showJoinStatus(`Beitritt für ${code} angefragt…`);
+        joinPending = { code };
+      } else {
+        showJoinStatus("Erstelle neue Lobby…");
+      }
+      socket.emit("enter_room", { name, requestedCode: code, useDeckel });
     };
 
     document.getElementById("btnStartGame").onclick = () => {
@@ -454,7 +617,10 @@
 
     document.getElementById("btnBackToLobby").onclick = () => {
       if (isHost && room && myToken) {
-        socket.emit("return_lobby", { code: room.code, token: myToken });
+        const ok = window.confirm("Zurück zur Lobby? Das beendet das Spiel und löscht den Fortschritt.");
+        if (ok) {
+          socket.emit("return_lobby", { code: room.code, token: myToken });
+        }
         return;
       }
       showLobbyError("Nur der Host kann alle zurück in die Lobby schicken.");
@@ -480,14 +646,38 @@
 
     window.onload = () => {
       setSuggestedCode();
+      if (myName) {
+        document.getElementById("playerName").value = myName;
+      }
       if (myRoomCode && myToken) {
         document.getElementById("rejoinBox").style.display = "block";
       }
+      showJoinStatus("");
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("/sw.js").catch(() => {});
       }
       startKeepalive();
     };
+
+    document.getElementById("btnReload").onclick = () => {
+      window.location.reload();
+    };
+
+    socket.on("connect", () => {
+      if (myRoomCode && myToken) {
+        socket.emit("rejoin_room", { code: myRoomCode, token: myToken });
+      }
+      socket.emit("get_lobby_list");
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (myRoomCode && myToken) {
+          socket.emit("rejoin_room", { code: myRoomCode, token: myToken });
+        }
+        socket.emit("get_lobby_list");
+      }
+    });
   </script>
 </body>
 </html>
