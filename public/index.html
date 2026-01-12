@@ -49,13 +49,26 @@
     .score-table th, .score-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: center; background-color: white; }
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
     .kniffel-select { width: min(360px, 92%); font-size: 18px; padding: 10px; margin: 6px auto; }
+    #kniffelView .die { font-size: clamp(48px, 12vw, 110px); line-height: clamp(48px, 12vw, 110px); }
   </style>
 </head>
 <body>
-  <h1 id="pageTitle">Schocken (Lobby)</h1>
+  <h1 id="pageTitle">Spieleflur (Lobby)</h1>
 
   <div id="lobby">
     <div id="lobbyCard">
+      <label class="toggle-row">
+        <span>Spieltyp</span>
+        <select id="gameTypeSelect">
+          <option value="schocken">Schocken</option>
+          <option value="kniffel">Kniffel</option>
+        </select>
+      </label>
+      <label class="toggle-row">
+        <input type="checkbox" id="deckelToggle" />
+        <span>Mit Deckeln spielen</span>
+      </label>
+
       <hr />
       <div id="rejoinBox" style="display:none;">
         <h3>Wieder beitreten</h3>
@@ -78,18 +91,6 @@
       <div id="joinStatus" class="small muted"></div>
 
       <hr />
-      <label class="toggle-row">
-        <input type="checkbox" id="deckelToggle" />
-        <span>Mit Deckeln spielen</span>
-      </label>
-      <label class="toggle-row">
-        <span>Spieltyp</span>
-        <select id="gameTypeSelect">
-          <option value="schocken">Schocken</option>
-          <option value="kniffel">Kniffel</option>
-        </select>
-      </label>
-
       <div class="lobby-list" id="activeLobbies">
         <div class="small muted">Aktive Lobbys werden geladen…</div>
       </div>
@@ -1011,6 +1012,7 @@
     };
 
     document.getElementById("gameTypeSelect").onchange = (event) => {
+      updateDeckelToggleState();
       if (!room || !myToken) return;
       if (!isHost || room.status !== "lobby") {
         event.target.value = room?.settings?.gameType || "schocken";
@@ -1020,18 +1022,6 @@
         code: room.code,
         token: myToken,
         useDeckel: room.settings?.useDeckel,
-        gameType: event.target.value
-      });
-    };
-    document.getElementById("gameTypeSelect").onchange = (event) => {
-      if (!room || !myToken) return;
-      if (!isHost || room.status !== "lobby") {
-        event.target.value = room?.settings?.gameType || "classic";
-        return;
-      }
-      socket.emit("update_room_settings", {
-        code: room.code,
-        token: myToken,
         gameType: event.target.value
       });
     };
@@ -1092,11 +1082,16 @@
     function updateDeckelToggleState() {
       const toggle = document.getElementById("deckelToggle");
       if (!toggle) return;
-      const isSchocken = (room?.settings?.gameType || "schocken") === "schocken";
+      const selectedType = room?.settings?.gameType
+        || document.getElementById("gameTypeSelect")?.value
+        || "schocken";
+      const isSchocken = selectedType === "schocken";
       if (room && room.status === "lobby") {
         toggle.checked = !!room.settings?.useDeckel && isSchocken;
       }
-      toggle.disabled = !!room && (!isHost || room.status !== "lobby" || !isSchocken);
+      toggle.disabled = !!room
+        ? (!isHost || room.status !== "lobby" || !isSchocken)
+        : !isSchocken;
       toggle.parentElement.style.display = isSchocken ? "flex" : "none";
     }
 
