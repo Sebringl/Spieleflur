@@ -369,55 +369,6 @@ function handleJoinRequest(socket, { code, name }) {
   emitPendingRequests(room);
 }
 
-function createRoom({ socket, name, useDeckel, requestedCode }) {
-  let code;
-  const normalizedRequested = normalizeCode(requestedCode);
-  if (normalizedRequested) {
-    if (!isValidCode(normalizedRequested)) {
-      return socket.emit("error_msg", { message: `Room-Code ungültig (nur ${CODE_LENGTH} Zeichen aus 23456789ABCDEFGHJKMNPQRSTUVWXYZ).` });
-    }
-    if (rooms.has(normalizedRequested)) {
-      return socket.emit("error_msg", { message: "Room-Code ist bereits vergeben." });
-    }
-    code = normalizedRequested;
-  } else {
-    do { code = makeCode(); } while (rooms.has(code));
-  }
-
-  const token = makeToken();
-  const room = {
-    code,
-    status: "lobby",
-    settings: { useDeckel: !!useDeckel },
-    hostToken: token,
-    hostSeat: 0,
-    players: [
-      { token, socketId: socket.id, name, connected: true }
-    ],
-    pendingRequests: [],
-    state: null
-  };
-
-  rooms.set(code, room);
-  socket.join(code);
-
-  persistRooms();
-
-  socket.emit("room_joined", {
-    code,
-    token,
-    seatIndex: 0,
-    name,
-    isHost: true,
-    room: safeRoom(room),
-    state: null
-  });
-
-  io.to(code).emit("room_update", safeRoom(room));
-  emitPendingRequests(room);
-  emitLobbyList();
-}
-
 async function persistRooms() {
   const data = [...rooms.values()].map(room => ({
     code: room.code,
@@ -495,6 +446,44 @@ io.on("connection", (socket) => {
       }
     }
     createRoom({ socket, name: cleanName, useDeckel, requestedCode: normalized });
+  });
+
+    const token = makeToken();
+    const room = {
+      code,
+      status: "lobby",
+      settings: { useDeckel: !!useDeckel },
+      hostToken: token,
+      hostSeat: 0,
+      players: [
+        { token, socketId: socket.id, name: cleanName, connected: true }
+      ],
+      pendingRequests: [],
+      state: null
+    };
+
+    const idx = room.pendingRequests.findIndex(req => req.id === requestId);
+    if (idx < 0) return socket.emit("error_msg", { message: "Anfrage nicht gefunden." });
+
+    const request = room.pendingRequests[idx];
+    room.pendingRequests.splice(idx, 1);
+
+    const targetSocket = io.sockets.sockets.get(request.socketId);
+    if (!accept) {
+      if (targetSocket) {
+        targetSocket.emit("join_denied", { message: "Host hat den Beitritt abgelehnt." });
+      }
+      emitPendingRequests(room);
+      return;
+    }
+
+    io.to(code).emit("room_update", safeRoom(room));
+    emitPendingRequests(room);
+    emitLobbyList();
+  });
+
+  socket.on("request_join", ({ code, name }) => {
+    handleJoinRequest(socket, { code, name });
   });
 
   socket.on("approve_join", ({ code, token, requestId, accept }) => {
