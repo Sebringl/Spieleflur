@@ -5,6 +5,10 @@ import crypto from "crypto";
 import fs from "fs/promises";
 
 const app = express();
+app.use((req, res, next) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 app.use(express.static("public"));
 
 // Keepalive endpoint: hält Free-Service während des Spiels wach

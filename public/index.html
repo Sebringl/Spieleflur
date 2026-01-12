@@ -5,6 +5,7 @@
   <title>Schocken Multiplayer</title>
   <link rel="icon" href="/icon.png" sizes="1024x1024" type="image/png" />
   <link rel="manifest" href="/manifest.json" />
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     html { font-size: 18px; }
@@ -32,6 +33,8 @@
     .code-input-row input { flex: 1 1 220px; margin: 6px 0; }
     .icon-btn { width: 46px; height: 46px; border-radius: 10px; font-size: 20px; padding: 0; margin: 6px 0; }
     .icon-btn span { display: inline-block; transform: rotate(0deg); }
+    footer { margin-top: 24px; font-size: 14px; color: #555; }
+    .impressum-link { display: inline-block; margin-top: 20px; font-size: 14px; color: #555; }
   </style>
 </head>
 <body>
@@ -111,6 +114,10 @@
       <button id="btnBackToLobby">Zurück zur Lobby</button>
     </div>
   </div>
+
+  <footer>
+    <a class="impressum-link" href="/impressum.html" target="_blank" rel="noopener noreferrer">Impressum</a>
+  </footer>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
