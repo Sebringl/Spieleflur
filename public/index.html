@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Schocken Multiplayer</title>
+  <title>Spieleflur</title>
   <link rel="icon" href="/icon.png" sizes="1024x1024" type="image/png" />
   <link rel="manifest" href="/manifest.json" />
   <meta name="robots" content="noindex, nofollow" />
@@ -14,7 +14,7 @@
     .die { font-size: 140px; line-height: 140px; cursor: pointer; padding: 10px; border: 2px solid transparent; border-radius: 10px; user-select: none; }
     .die.inactive { color: #9a9a9a; cursor: default; }
     .held { border-color: green; background-color: #eaffea; }
-    button { margin: 8px; }
+    button { margin: 8px; font-size: 20px; padding: 12px 18px; }
     input { font-size: 18px; padding: 10px; margin: 6px; width: min(320px, 90%); }
     #result, #throwCount, #playerDisplay { font-size: 18px; margin-top: 10px; transition: color 0.2s ease; }
     #historyTable table { border-collapse: collapse; margin: auto; width: 100%; font-size: 0.9rem; }
@@ -23,7 +23,7 @@
     .winner { background-color: #fff9c4; }
     #lobbyCard { border: 1px solid #ddd; border-radius: 12px; padding: 16px; text-align: left; }
     .small { font-size: 14px; opacity: 0.85; }
-    .codeBig { font-size: 32px; letter-spacing: 3px; font-weight: 800; text-align: center; margin: 10px 0; }
+    .codeBig { font-size: 28px; letter-spacing: 3px; font-weight: 800; text-align: center; margin: 10px 0; }
     .playerList { text-align: left; max-width: 420px; margin: 0 auto; }
     .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 13px; margin-left: 8px; }
     .ok { background: #eaffea; }
@@ -45,10 +45,10 @@
     .centered { display: block; margin-left: auto; margin-right: auto; }
     footer { margin-top: 24px; font-size: 14px; color: #555; }
     .impressum-link { display: inline-block; margin-top: 20px; font-size: 14px; color: #555; }
-    .score-table { border-collapse: collapse; margin: 10px auto; width: 100%; font-size: 0.9rem; }
-    .score-table th, .score-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: center; background-color: white; }
+    .score-table { border-collapse: collapse; margin: 10px auto; width: 100%; font-size: 0.8rem; }
+    .score-table th, .score-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; background-color: white; }
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
-    .kniffel-select { width: min(360px, 92%); font-size: 18px; padding: 10px; margin: 6px auto; }
+    .kniffel-select { width: min(360px, 92%); font-size: 16px; padding: 8px; margin: 6px auto; }
     #kniffelView .die { font-size: clamp(56px, 14vw, 130px); line-height: clamp(56px, 14vw, 130px); }
   </style>
 </head>
@@ -61,7 +61,7 @@
         <span>Spieltyp</span>
         <select id="gameTypeSelect">
           <option value="schocken">Schocken</option>
-          <option value="kniffel">Kniffel</option>
+          <option value="kniffel">Yahtzee</option>
         </select>
       </label>
       <label class="toggle-row">
@@ -189,7 +189,7 @@
       { key: "fullHouse", label: "Full House" },
       { key: "smallStraight", label: "Kleine Straße" },
       { key: "largeStraight", label: "Große Straße" },
-      { key: "yahtzee", label: "Kniffel" },
+      { key: "yahtzee", label: "Yahtzee" },
       { key: "chance", label: "Chance" }
     ];
 
@@ -209,7 +209,7 @@
       document.getElementById("game").style.display  = (view === "game") ? "block" : "none";
       const title = document.getElementById("pageTitle");
       if (title) {
-        const gameTitle = (room && room.settings && room.settings.gameType === "kniffel") ? "Kniffel" : "Schocken";
+        const gameTitle = (room && room.settings && room.settings.gameType === "kniffel") ? "Yahtzee" : "Schocken";
         title.textContent = (view === "game" && room && room.code) ? `${gameTitle} (${room.code})` : `${gameTitle} (Lobby)`;
       }
     }
@@ -400,12 +400,15 @@
       const container = document.getElementById("pendingList");
       if (!isHost) {
         container.innerHTML = "";
+        container.style.display = "none";
         return;
       }
       if (!requests || requests.length === 0) {
-        container.innerHTML = "<h4>Beitrittsanfragen</h4><div class='small muted'>Keine offenen Anfragen.</div>";
+        container.innerHTML = "";
+        container.style.display = "none";
         return;
       }
+      container.style.display = "block";
       let html = "<h4>Beitrittsanfragen</h4><ul>";
       requests.forEach(req => {
         const safeName = escapeHtml(req.name);
@@ -446,7 +449,7 @@
       let html = "<h4>Aktive Lobbys</h4>";
       lobbies.forEach(lobby => {
         const host = escapeHtml(lobby.hostName || "Host");
-        const gameLabel = lobby.gameType === "kniffel" ? "Kniffel" : "Schocken";
+        const gameLabel = lobby.gameType === "kniffel" ? "Yahtzee" : "Schocken";
         html += `<div class="lobby-item">
           <div>
             <div><strong>${lobby.code}</strong> · ${host}</div>
