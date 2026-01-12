@@ -14,7 +14,7 @@
     .die { font-size: 140px; line-height: 140px; cursor: pointer; padding: 10px; border: 2px solid transparent; border-radius: 10px; user-select: none; }
     .die.inactive { color: #9a9a9a; cursor: default; }
     .held { border-color: green; background-color: #eaffea; }
-    button { padding: 12px; width: min(320px, 90%); height: 62px; font-size: 20px; margin: 8px; }
+    button { margin: 8px; }
     input { font-size: 18px; padding: 10px; margin: 6px; width: min(320px, 90%); }
     #result, #throwCount, #playerDisplay { font-size: 18px; margin-top: 10px; transition: color 0.2s ease; }
     #historyTable table { border-collapse: collapse; margin: auto; width: 100%; font-size: 0.9rem; }
@@ -35,12 +35,12 @@
     .code-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
     .code-input-row input { flex: 0 0 min(320px, 90%); margin: 6px 0; }
     .text-input { width: min(320px, 90%); }
-    .icon-btn { width: 46px; height: 46px; border-radius: 10px; font-size: 20px; padding: 0; margin: 6px 0; }
+    .icon-btn { border-radius: 10px; margin: 6px 0; }
     .icon-btn span { display: inline-block; transform: rotate(0deg); }
     .refresh-row { margin: 8px 0 12px; }
     .lobby-list { text-align: left; max-width: 420px; margin: 10px auto; }
     .lobby-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #eee; border-radius: 10px; padding: 10px; margin: 8px 0; }
-    .lobby-item button { width: auto; min-width: 140px; height: 44px; font-size: 16px; margin: 0; }
+    .lobby-item button { margin: 0; }
     .muted { opacity: 0.7; }
     .centered { display: block; margin-left: auto; margin-right: auto; }
     footer { margin-top: 24px; font-size: 14px; color: #555; }
@@ -49,7 +49,7 @@
     .score-table th, .score-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: center; background-color: white; }
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
     .kniffel-select { width: min(360px, 92%); font-size: 18px; padding: 10px; margin: 6px auto; }
-    #kniffelView .die { font-size: clamp(48px, 12vw, 110px); line-height: clamp(48px, 12vw, 110px); }
+    #kniffelView .die { font-size: clamp(56px, 14vw, 130px); line-height: clamp(56px, 14vw, 130px); }
   </style>
 </head>
 <body>
@@ -110,7 +110,7 @@
         </div>
         <div id="lobbyExpiryNotice" style="display:none; margin-top: 10px; border: 1px solid #f3c97a; border-radius: 10px; padding: 10px; background: #fff7e6;">
           <div class="small" id="lobbyExpiryText"></div>
-          <button id="btnKeepLobby" style="width:auto; min-width: 180px; height: 44px; font-size: 16px; margin: 8px 0 0;">Lobby behalten</button>
+          <button id="btnKeepLobby" style="margin: 8px 0 0;">Lobby behalten</button>
         </div>
         <div class="small" id="hostStartHint">Nur der Host kann das Spiel starten.</div>
       </div>
