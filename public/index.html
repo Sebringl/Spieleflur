@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Schocken Multiplayer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html { font-size: 18px; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; max-width: 760px; margin: auto; transition: background-color 0.2s ease; }
+    .dice-container { display: flex; justify-content: center; gap: 14px; margin: 16px 0; }
+    .die { font-size: 140px; line-height: 140px; cursor: pointer; padding: 10px; border: 2px solid transparent; border-radius: 10px; user-select: none; }
+    .held { border-color: green; background-color: #eaffea; }
+    button { padding: 12px; width: min(320px, 90%); height: 62px; font-size: 20px; margin: 8px; }
+    input { font-size: 18px; padding: 10px; margin: 6px; width: min(320px, 90%); }
+    #result, #throwCount, #playerDisplay { font-size: 18px; margin-top: 10px; transition: color 0.2s ease; }
+    #historyTable table { border-collapse: collapse; margin: auto; width: 100%; font-size: 0.9rem; }
+    #historyTable th, #historyTable td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; background-color: white; }
+    #historyTable th { background-color: #e0e0e0; font-weight: bold; }
+    .winner { background-color: #fff9c4; }
+    #lobbyCard { border: 1px solid #ddd; border-radius: 12px; padding: 16px; text-align: left; }
+    .small { font-size: 14px; opacity: 0.85; }
+    .codeBig { font-size: 32px; letter-spacing: 3px; font-weight: 800; text-align: center; margin: 10px 0; }
+    .playerList { text-align: left; max-width: 420px; margin: 0 auto; }
+    .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 13px; margin-left: 8px; }
+    .ok { background: #eaffea; }
+    .bad { background: #ffe5e5; }
+  </style>
+</head>
+<body>
+  <h1>Schocken (Multiplayer)</h1>
+
+  <div id="lobby">
+    <div id="lobbyCard">
+      <h2>Lobby</h2>
+      <div class="small">Host erstellt Spiel → Code → alle anderen joinen mit Code.</div>
+
+      <hr />
+      <h3>Neues Spiel erstellen (Host)</h3>
+      <input id="hostName" type="text" placeholder="Dein Name" />
+      <label style="display:block; margin: 8px 0;">
+        <input type="checkbox" id="deckelToggle" />
+        Mit Deckeln spielen
+      </label>
+      <button id="btnCreate">Neues Spiel erstellen</button>
+
+      <hr />
+      <h3>Spiel beitreten</h3>
+      <input id="joinName" type="text" placeholder="Dein Name" />
+      <input id="joinCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
+      <button id="btnJoin">Beitreten</button>
+
+      <hr />
+      <div id="rejoinBox" style="display:none;">
+        <h3>Wieder beitreten</h3>
+        <div class="small">Wir haben ein gespeichertes Room-Login gefunden.</div>
+        <button id="btnRejoin">Wieder beitreten</button>
+        <button id="btnForget">Vergessen</button>
+      </div>
+
+      <hr />
+      <div id="roomView" style="display:none;">
+        <h3>Room</h3>
+        <div class="codeBig" id="roomCodeBig">------</div>
+        <div class="playerList" id="playerList"></div>
+        <div id="hostControls" style="display:none; margin-top: 10px;">
+          <button id="btnStartGame">Spiel starten</button>
+          <div class="small">Nur der Host kann starten.</div>
+        </div>
+      </div>
+
+      <div id="lobbyError" style="color:red; margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <div id="game" style="display:none;">
+    <h2 id="playerDisplay" style="margin-bottom: 0;">Am Zug: -</h2>
+    <div class="small" id="turnHint"></div>
+
+    <div class="dice-container">
+      <div class="die" id="die0">□</div>
+      <div class="die" id="die1">□</div>
+      <div class="die" id="die2">□</div>
+    </div>
+
+    <button id="rollBtn">Würfeln</button>
+    <button id="endTurnBtn">Zug beenden</button>
+
+    <div id="throwCount">Wurf: 0</div>
+    <div id="roundDisplay" style="margin-top:10px; font-weight:bold;">Runde: 1</div>
+    <div id="result"></div>
+    <div id="historyTable" style="margin-top: 14px;"></div>
+
+    <div style="margin-top: 14px;">
+      <button id="btnBackToLobby">Zurück zur Lobby</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const diceSymbols = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+    const playerTextColors = ['#e6194b','#4363d8','#f58231','#911eb4','#008080','#f032e6','#bcf60c','#0082c8'];
+    const playerBgColors   = ['#ffe5e5','#e5e5ff','#fff5e5','#f5e5ff','#e5f5ff','#ffe5f5','#f5ffe5','#e5ffff'];
+
+    let myToken    = localStorage.getItem("schocken_token") || null;
+    let myRoomCode = localStorage.getItem("schocken_code") || null;
+    let mySeat     = Number(localStorage.getItem("schocken_seat") || "-1");
+    let myName     = localStorage.getItem("schocken_name") || "";
+    let isHost     = false;
+
+    let room = null;
+    let state = null;
+
+    function setView(view) {
+      document.getElementById("lobby").style.display = (view === "lobby") ? "block" : "none";
+      document.getElementById("game").style.display  = (view === "game") ? "block" : "none";
+    }
+    function showLobbyError(msg) {
+      document.getElementById("lobbyError").textContent = msg || "";
+    }
+    function showGameMessage(msg, isError=false) {
+      const el = document.getElementById("result");
+      el.textContent = msg || "";
+      el.style.color = isError ? "red" : "black";
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
+
+    function isMyTurn() {
+      return state && mySeat >= 0 && state.currentPlayer === mySeat;
+    }
+
+    function renderRoomView() {
+      if (!room) return;
+      document.getElementById("roomView").style.display = "block";
+      document.getElementById("roomCodeBig").textContent = room.code;
+
+      const list = room.players || [];
+      let html = "<h4>Spieler</h4><ul>";
+      list.forEach(p => {
+        const connected = p.connected ? `<span class="pill ok">online</span>` : `<span class="pill bad">offline</span>`;
+        html += `<li>${escapeHtml(p.name)} ${connected}</li>`;
+      });
+      html += "</ul>";
+      document.getElementById("playerList").innerHTML = html;
+
+      document.getElementById("hostControls").style.display = isHost ? "block" : "none";
+    }
+
+    function getRoundBestPlayerIndex(round) {
+      const entries = round
+        .map((entry, i) => ({ ...entry, index: i }))
+        .filter(e => e && e.label && typeof e.tier !== "undefined");
+      if (!entries.length) return null;
+      entries.sort((a, b) => {
+        if (a.tier !== b.tier) return b.tier - a.tier;
+        if (a.subvalue !== b.subvalue) return b.subvalue - a.subvalue;
+        if (a.throws !== b.throws) return a.throws - b.throws;
+        return a.index - b.index;
+      });
+      return entries[0].index;
+    }
+
+    function updateHistoryTable() {
+      if (!state || !state.history || !state.history.length) {
+        document.getElementById("historyTable").innerHTML = "";
+        return;
+      }
+
+      const players = state.players;
+      const history = state.history;
+      const useDeckel = !!state.useDeckel;
+      const wins = state.wins || [];
+      const deckelCount = state.deckelCount || [];
+
+      let html = "<h3>Spielverlauf</h3><table>";
+      html += "<tr><th rowspan='2'>Runde</th>";
+      players.forEach((name, i) => {
+        let displayName = useDeckel ? `${escapeHtml(name)} (${deckelCount[i] || 0})`
+                                    : ((wins[i] > 0) ? `${escapeHtml(name)} (${wins[i]} 👑)` : escapeHtml(name));
+        html += `<th colspan="2" style="color:${playerTextColors[i % playerTextColors.length]};">${displayName}</th>`;
+      });
+      html += "</tr>";
+
+      html += "<tr>";
+      players.forEach(() => {
+        html += `<th>🎲</th><th>${useDeckel ? "Deckel" : "🔁"}</th>`;
+      });
+      html += "</tr>";
+
+      for (let i = history.length - 1; i >= 0; i--) {
+        const r = history[i];
+        const winnerIndex = getRoundBestPlayerIndex(r);
+
+        html += `<tr><td>${i + 1}</td>`;
+        players.forEach((_, p) => {
+          const entry = r[p];
+          const isWinner = p === winnerIndex && entry;
+          const cls = isWinner ? "winner" : "";
+          if (entry) {
+            html += `<td class="${cls}">${escapeHtml(entry.label)}</td>`;
+            html += `<td class="${cls}">${useDeckel ? (deckelCount[p] || 0) : entry.throws}</td>`;
+          } else {
+            html += `<td>-</td><td>-</td>`;
+          }
+        });
+        html += "</tr>";
+      }
+
+      html += "</table>";
+      document.getElementById("historyTable").innerHTML = html;
+    }
+
+    function renderGame() {
+      if (!state) return;
+
+      const currentName = state.players[state.currentPlayer] || "-";
+      document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
+      document.getElementById("throwCount").textContent = `Wurf: ${state.throwCount}`;
+      document.getElementById("roundDisplay").textContent = `Runde: ${state.roundNumber}`;
+
+      const colorIdx = state.currentPlayer % playerTextColors.length;
+      document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
+      document.body.style.backgroundColor = playerBgColors[colorIdx];
+
+      for (let i = 0; i < 3; i++) {
+        const el = document.getElementById(`die${i}`);
+        const val = state.dice[i];
+        el.textContent = val ? diceSymbols[val - 1] : "□";
+        el.className = "die" + (state.held[i] ? " held" : "");
+        el.onclick = () => {
+          if (!isMyTurn()) return;
+          socket.emit("action_toggle", { code: room.code, index: i });
+        };
+      }
+
+      const remaining = state.maxThrowsThisRound - state.throwCount;
+      const allHeld = state.held.every(h => h);
+
+      const rollBtn = document.getElementById("rollBtn");
+      rollBtn.textContent = allHeld ? "Alle Würfel gehalten" : `Würfeln (${remaining})`;
+      rollBtn.disabled = !isMyTurn() || allHeld || remaining <= 0;
+
+      const endBtn = document.getElementById("endTurnBtn");
+      endBtn.disabled = !isMyTurn() || state.throwCount === 0 || state.dice.includes(null) || state.convertedThisTurn;
+
+      document.getElementById("turnHint").textContent =
+        isMyTurn() ? "Du bist am Zug." : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+
+      if (state.message) showGameMessage(state.message, false);
+
+      updateHistoryTable();
+    }
+
+    // Keepalive: nur wenn Game-View aktiv (damit Render nicht während der Session einschläft)
+    let pingTimer = null;
+    function startKeepalive() {
+      if (pingTimer) return;
+      pingTimer = setInterval(() => {
+        fetch("/ping", { cache: "no-store" }).catch(() => {});
+      }, 5 * 60 * 1000);
+    }
+    function stopKeepalive() {
+      if (!pingTimer) return;
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+
+    // ---- Socket events ----
+    socket.on("room_joined", (payload) => {
+      showLobbyError("");
+
+      myRoomCode = payload.code;
+      myToken = payload.token;
+      mySeat = payload.seatIndex;
+      myName = payload.name;
+      isHost = payload.isHost;
+
+      localStorage.setItem("schocken_code", myRoomCode);
+      localStorage.setItem("schocken_token", myToken);
+      localStorage.setItem("schocken_seat", String(mySeat));
+      localStorage.setItem("schocken_name", myName);
+
+      room = payload.room;
+      state = payload.state || null;
+
+      renderRoomView();
+
+      if (state) {
+        setView("game");
+        startKeepalive();
+        renderGame();
+      } else {
+        setView("lobby");
+        stopKeepalive();
+      }
+    });
+
+    socket.on("room_update", (payloadRoom) => {
+      room = payloadRoom;
+      renderRoomView();
+    });
+
+    socket.on("state_update", (payloadState) => {
+      state = payloadState;
+      setView("game");
+      startKeepalive();
+      renderGame();
+    });
+
+    socket.on("error_msg", ({ message }) => {
+      if (document.getElementById("lobby").style.display !== "none") showLobbyError(message);
+      else showGameMessage(message, true);
+    });
+
+    // ---- Buttons ----
+    document.getElementById("btnCreate").onclick = () => {
+      const name = document.getElementById("hostName").value.trim();
+      const useDeckel = document.getElementById("deckelToggle").checked;
+      if (!name) return showLobbyError("Bitte Name eingeben.");
+      socket.emit("create_room", { name, useDeckel });
+    };
+
+    document.getElementById("btnJoin").onclick = () => {
+      const name = document.getElementById("joinName").value.trim();
+      const code = document.getElementById("joinCode").value.trim().toUpperCase();
+      if (!name) return showLobbyError("Bitte Name eingeben.");
+      if (!code) return showLobbyError("Bitte Room-Code eingeben.");
+      socket.emit("join_room", { name, code });
+    };
+
+    document.getElementById("btnStartGame").onclick = () => {
+      if (!room || !myToken) return;
+      socket.emit("start_game", { code: room.code, token: myToken });
+    };
+
+    document.getElementById("rollBtn").onclick = () => {
+      if (!room) return;
+      socket.emit("action_roll", { code: room.code });
+    };
+
+    document.getElementById("endTurnBtn").onclick = () => {
+      if (!room) return;
+      socket.emit("action_end_turn", { code: room.code });
+    };
+
+    document.getElementById("btnBackToLobby").onclick = () => {
+      setView("lobby");
+      stopKeepalive();
+      document.body.style.backgroundColor = "";
+      showLobbyError("");
+    };
+
+    document.getElementById("btnRejoin").onclick = () => {
+      if (!myRoomCode || !myToken) return;
+      socket.emit("rejoin_room", { code: myRoomCode, token: myToken });
+    };
+
+    document.getElementById("btnForget").onclick = () => {
+      localStorage.removeItem("schocken_code");
+      localStorage.removeItem("schocken_token");
+      localStorage.removeItem("schocken_seat");
+      myRoomCode = null; myToken = null; mySeat = -1;
+      document.getElementById("rejoinBox").style.display = "none";
+      showLobbyError("Vergessen. Du kannst neu erstellen oder beitreten.");
+    };
+
+    window.onload = () => {
+      if (myRoomCode && myToken) {
+        document.getElementById("rejoinBox").style.display = "block";
+      }
+    };
+  </script>
+</body>
+</html>
