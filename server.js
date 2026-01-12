@@ -169,6 +169,19 @@ function nextPlayer(state) {
   prepareNextRound(state);
 }
 
+function rotateCurrentPlayer(state) {
+  const order = activeOrder(state);
+  if (order.length === 0) return;
+  const currentPos = seatToOrderPos(order, state.currentPlayer);
+  const nextPos = (currentPos + 1) % order.length;
+  const startPos = seatToOrderPos(order, state.startPlayerIndex);
+
+  state.currentPlayer = order[nextPos];
+  state.playerTurnIndex = (nextPos - startPos + order.length) % order.length;
+  resetTurn(state);
+  state.message = "Host hat den nächsten Spieler gewählt.";
+}
+
 function prepareNextRound(state) {
   const order = activeOrder(state);
 

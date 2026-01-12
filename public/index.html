@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Schocken Multiplayer</title>
+  <link rel="manifest" href="/manifest.json" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     html { font-size: 18px; }
@@ -85,7 +86,10 @@
   </div>
 
   <div id="game" style="display:none;">
-    <h2 id="playerDisplay" style="margin-bottom: 0;">Am Zug: -</h2>
+    <div class="turn-row">
+      <h2 id="playerDisplay">Am Zug: -</h2>
+      <button id="btnRotatePlayer" class="icon-btn" title="Nächster Spieler" aria-label="Nächster Spieler">⟳</button>
+    </div>
     <div class="small" id="turnHint"></div>
 
     <div class="dice-container">
@@ -120,6 +124,7 @@
     let mySeat     = Number(localStorage.getItem("schocken_seat") || "-1");
     let myName     = localStorage.getItem("schocken_name") || "";
     let isHost     = false;
+    let wasMyTurn  = false;
 
     let room = null;
     let state = null;
@@ -153,6 +158,43 @@
 
     function isMyTurn() {
       return state && mySeat >= 0 && state.currentPlayer === mySeat;
+    }
+
+    async function notifyMyTurn(playerName) {
+      if (!("Notification" in window)) return;
+      if (Notification.permission === "denied") return;
+
+      if (Notification.permission === "default") {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") return;
+        } catch (err) {
+          return;
+        }
+      }
+
+      const title = "Du bist am Zug";
+      const body = playerName ? `Am Zug: ${playerName}` : "Jetzt bist du dran!";
+
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification(title, {
+            body,
+            icon: "/icon.svg",
+            badge: "/icon.svg"
+          });
+          return;
+        } catch (err) {
+          // fall back to window notification
+        }
+      }
+
+      try {
+        new Notification(title, { body });
+      } catch (err) {
+        // ignore
+      }
     }
 
     function renderRoomView() {
@@ -272,23 +314,42 @@
       document.getElementById("turnHint").textContent =
         isMyTurn() ? "Du bist am Zug." : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
 
+      document.getElementById("btnRotatePlayer").style.display = isHost ? "inline-flex" : "none";
+
+      const myTurnNow = isMyTurn();
+      if (myTurnNow && !wasMyTurn) {
+        notifyMyTurn(currentName);
+      }
+      wasMyTurn = myTurnNow;
+
       if (state.message) showGameMessage(state.message, false);
 
       updateHistoryTable();
     }
 
-    // Keepalive: nur wenn Game-View aktiv (damit Render nicht während der Session einschläft)
+    // Keepalive: solange die Seite geöffnet ist (bis zu 72h)
     let pingTimer = null;
+    let pingStopTimer = null;
+    const KEEPALIVE_DURATION_MS = 72 * 60 * 60 * 1000;
     function startKeepalive() {
       if (pingTimer) return;
       pingTimer = setInterval(() => {
         fetch("/ping", { cache: "no-store" }).catch(() => {});
       }, 5 * 60 * 1000);
+      if (!pingStopTimer) {
+        pingStopTimer = setTimeout(() => {
+          stopKeepalive();
+        }, KEEPALIVE_DURATION_MS);
+      }
     }
     function stopKeepalive() {
       if (!pingTimer) return;
       clearInterval(pingTimer);
       pingTimer = null;
+      if (pingStopTimer) {
+        clearTimeout(pingStopTimer);
+        pingStopTimer = null;
+      }
     }
 
     // ---- Socket events ----
@@ -317,7 +378,6 @@
         renderGame();
       } else {
         setView("lobby");
-        stopKeepalive();
       }
     });
 
@@ -343,6 +403,13 @@
       }
       if (document.getElementById("lobby").style.display !== "none") showLobbyError(message);
       else showGameMessage(message, true);
+    });
+
+    socket.on("lobby_returned", ({ message } = {}) => {
+      setView("lobby");
+      document.body.style.backgroundColor = "";
+      wasMyTurn = false;
+      showLobbyError(message || "");
     });
 
     // ---- Buttons ----
@@ -378,10 +445,11 @@
     };
 
     document.getElementById("btnBackToLobby").onclick = () => {
-      setView("lobby");
-      stopKeepalive();
-      document.body.style.backgroundColor = "";
-      showLobbyError("");
+      if (isHost && room && myToken) {
+        socket.emit("return_lobby", { code: room.code, token: myToken });
+        return;
+      }
+      showLobbyError("Nur der Host kann alle zurück in die Lobby schicken.");
     };
 
     document.getElementById("btnRejoin").onclick = () => {
@@ -407,6 +475,10 @@
       if (myRoomCode && myToken) {
         document.getElementById("rejoinBox").style.display = "block";
       }
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
+      startKeepalive();
     };
   </script>
 </body>
