@@ -22,8 +22,9 @@ const io = new Server(server, {
 // In-Memory Rooms (persisted to disk)
 const rooms = new Map(); // code -> room
 const ROOMS_FILE = "./rooms.json";
+const CODE_LENGTH = 5;
 
-function makeCode(len = 6) {
+function makeCode(len = CODE_LENGTH) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   let s = "";
   for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
@@ -34,7 +35,7 @@ function normalizeCode(value) {
   return String(value || "").trim().toUpperCase();
 }
 
-function isValidCode(code, len = 6) {
+function isValidCode(code, len = CODE_LENGTH) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   if (!code || code.length !== len) return false;
   return [...code].every(ch => alphabet.includes(ch));
@@ -428,19 +429,24 @@ io.on("connection", (socket) => {
 
   socket.on("create_room", ({ name, useDeckel, requestedCode }) => {
     const cleanName = String(name || "").trim() || "Spieler";
-    let code;
-    const normalizedRequested = normalizeCode(requestedCode);
-    if (normalizedRequested) {
-      if (!isValidCode(normalizedRequested)) {
-        return socket.emit("error_msg", { message: "Room-Code ungültig (nur 6 Zeichen aus 23456789ABCDEFGHJKMNPQRSTUVWXYZ)." });
+    createRoom({ socket, name: cleanName, useDeckel, requestedCode });
+  });
+
+  socket.on("request_join", ({ code, name }) => {
+    handleJoinRequest(socket, { code, name });
+  });
+
+  socket.on("enter_room", ({ name, requestedCode, useDeckel }) => {
+    const cleanName = String(name || "").trim() || "Spieler";
+    const normalized = normalizeCode(requestedCode);
+    if (normalized) {
+      const room = rooms.get(normalized);
+      if (room) {
+        return handleJoinRequest(socket, { code: normalized, name: cleanName });
       }
-      if (rooms.has(normalizedRequested)) {
-        return socket.emit("error_msg", { message: "Room-Code ist bereits vergeben." });
-      }
-      code = normalizedRequested;
-    } else {
-      do { code = makeCode(); } while (rooms.has(code));
     }
+    createRoom({ socket, name: cleanName, useDeckel, requestedCode: normalized });
+  });
 
     const token = makeToken();
     const room = {
@@ -456,20 +462,20 @@ io.on("connection", (socket) => {
       state: null
     };
 
-    rooms.set(code, room);
-    socket.join(code);
+    const idx = room.pendingRequests.findIndex(req => req.id === requestId);
+    if (idx < 0) return socket.emit("error_msg", { message: "Anfrage nicht gefunden." });
 
-    persistRooms();
+    const request = room.pendingRequests[idx];
+    room.pendingRequests.splice(idx, 1);
 
-    socket.emit("room_joined", {
-      code,
-      token,
-      seatIndex: 0,
-      name: cleanName,
-      isHost: true,
-      room: safeRoom(room),
-      state: null
-    });
+    const targetSocket = io.sockets.sockets.get(request.socketId);
+    if (!accept) {
+      if (targetSocket) {
+        targetSocket.emit("join_denied", { message: "Host hat den Beitritt abgelehnt." });
+      }
+      emitPendingRequests(room);
+      return;
+    }
 
     io.to(code).emit("room_update", safeRoom(room));
     emitPendingRequests(room);
