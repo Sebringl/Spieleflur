@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import crypto from "crypto";
+import fs from "fs/promises";
 
 const app = express();
 app.use(express.static("public"));
@@ -14,14 +15,25 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// In-Memory Rooms (bei Restart weg!)
+// In-Memory Rooms (persisted to disk)
 const rooms = new Map(); // code -> room
+const ROOMS_FILE = "./rooms.json";
 
 function makeCode(len = 6) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   let s = "";
   for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
+}
+
+function normalizeCode(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isValidCode(code, len = 6) {
+  const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  if (!code || code.length !== len) return false;
+  return [...code].every(ch => alphabet.includes(ch));
 }
 function makeToken() {
   return crypto.randomBytes(16).toString("hex");
@@ -275,12 +287,72 @@ function safeRoom(room) {
   };
 }
 
+async function persistRooms() {
+  const data = [...rooms.values()].map(room => ({
+    code: room.code,
+    status: room.status,
+    settings: room.settings,
+    hostToken: room.hostToken,
+    hostSeat: room.hostSeat,
+    players: room.players.map(p => ({
+      token: p.token,
+      name: p.name,
+      connected: false,
+      socketId: null
+    })),
+    state: room.state
+  }));
+  try {
+    await fs.writeFile(ROOMS_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error("Konnte Rooms nicht speichern:", err);
+  }
+}
+
+async function loadRooms() {
+  try {
+    const raw = await fs.readFile(ROOMS_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return;
+    data.forEach(room => {
+      const normalizedCode = normalizeCode(room.code);
+      if (!normalizedCode) return;
+      rooms.set(normalizedCode, {
+        ...room,
+        code: normalizedCode,
+        players: (room.players || []).map(p => ({
+          ...p,
+          connected: false,
+          socketId: null
+        }))
+      });
+    });
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error("Konnte Rooms nicht laden:", err);
+    }
+  }
+}
+
+loadRooms();
+
 // ---- Socket.IO ----
 io.on("connection", (socket) => {
-  socket.on("create_room", ({ name, useDeckel }) => {
+  socket.on("create_room", ({ name, useDeckel, requestedCode }) => {
     const cleanName = String(name || "").trim() || "Spieler";
     let code;
-    do { code = makeCode(); } while (rooms.has(code));
+    const normalizedRequested = normalizeCode(requestedCode);
+    if (normalizedRequested) {
+      if (!isValidCode(normalizedRequested)) {
+        return socket.emit("error_msg", { message: "Room-Code ungültig (nur 6 Zeichen aus 23456789ABCDEFGHJKMNPQRSTUVWXYZ)." });
+      }
+      if (rooms.has(normalizedRequested)) {
+        return socket.emit("error_msg", { message: "Room-Code ist bereits vergeben." });
+      }
+      code = normalizedRequested;
+    } else {
+      do { code = makeCode(); } while (rooms.has(code));
+    }
 
     const token = makeToken();
     const room = {
@@ -298,6 +370,8 @@ io.on("connection", (socket) => {
     rooms.set(code, room);
     socket.join(code);
 
+    persistRooms();
+
     socket.emit("room_joined", {
       code,
       token,
@@ -312,7 +386,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join_room", ({ code, name }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
     if (room.status !== "lobby") return socket.emit("error_msg", { message: "Spiel läuft bereits." });
 
@@ -338,10 +412,11 @@ io.on("connection", (socket) => {
     });
 
     io.to(room.code).emit("room_update", safeRoom(room));
+    persistRooms();
   });
 
   socket.on("rejoin_room", ({ code, token }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
 
     const seatIndex = room.players.findIndex(p => p.token === token);
@@ -365,10 +440,11 @@ io.on("connection", (socket) => {
 
     io.to(room.code).emit("room_update", safeRoom(room));
     if (room.state) io.to(room.code).emit("state_update", room.state);
+    persistRooms();
   });
 
   socket.on("start_game", ({ code, token }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room) return;
     if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann starten." });
     if (room.players.length < 2) return socket.emit("error_msg", { message: "Mindestens 2 Spieler nötig." });
@@ -377,10 +453,11 @@ io.on("connection", (socket) => {
 
     io.to(room.code).emit("room_update", safeRoom(room));
     io.to(room.code).emit("state_update", room.state);
+    persistRooms();
   });
 
   socket.on("action_roll", ({ code }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
 
     const check = canAct(room, socket.id);
@@ -403,10 +480,11 @@ io.on("connection", (socket) => {
 
     applyManualSixRule(state);
     io.to(room.code).emit("state_update", state);
+    persistRooms();
   });
 
   socket.on("action_toggle", ({ code, index }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
 
     const check = canAct(room, socket.id);
@@ -438,16 +516,18 @@ io.on("connection", (socket) => {
 
       applyManualSixRule(state);
       io.to(room.code).emit("state_update", state);
+      persistRooms();
       return;
     }
 
     // hold/unhold
     state.held[i] = !state.held[i];
     io.to(room.code).emit("state_update", state);
+    persistRooms();
   });
 
   socket.on("action_end_turn", ({ code }) => {
-    const room = rooms.get(String(code || "").trim().toUpperCase());
+    const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
 
     const check = canAct(room, socket.id);
@@ -485,6 +565,7 @@ io.on("connection", (socket) => {
 
     io.to(room.code).emit("state_update", state);
     io.to(room.code).emit("room_update", safeRoom(room));
+    persistRooms();
   });
 
   socket.on("disconnect", () => {
@@ -494,6 +575,7 @@ io.on("connection", (socket) => {
         room.players[seat].connected = false;
         room.players[seat].socketId = null;
         io.to(room.code).emit("room_update", safeRoom(room));
+        persistRooms();
       }
     }
   });

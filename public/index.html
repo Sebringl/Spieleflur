@@ -24,6 +24,12 @@
     .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 13px; margin-left: 8px; }
     .ok { background: #eaffea; }
     .bad { background: #ffe5e5; }
+    .toggle-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
+    .toggle-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+    .code-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+    .code-input-row input { flex: 1 1 220px; margin: 6px 0; }
+    .icon-btn { width: 46px; height: 46px; border-radius: 10px; font-size: 20px; padding: 0; margin: 6px 0; }
+    .icon-btn span { display: inline-block; transform: rotate(0deg); }
   </style>
 </head>
 <body>
@@ -37,9 +43,15 @@
       <hr />
       <h3>Neues Spiel erstellen (Host)</h3>
       <input id="hostName" type="text" placeholder="Dein Name" />
-      <label style="display:block; margin: 8px 0;">
+      <div class="code-input-row">
+        <input id="hostCode" type="text" placeholder="Room-Code (z.B. K7F3Q9)" />
+        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
+          <span>🔄</span>
+        </button>
+      </div>
+      <label class="toggle-row">
         <input type="checkbox" id="deckelToggle" />
-        Mit Deckeln spielen
+        <span>Mit Deckeln spielen</span>
       </label>
       <button id="btnCreate">Neues Spiel erstellen</button>
 
@@ -123,6 +135,15 @@
       const el = document.getElementById("result");
       el.textContent = msg || "";
       el.style.color = isError ? "red" : "black";
+    }
+    function makeCode(len = 6) {
+      const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+      let s = "";
+      for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+      return s;
+    }
+    function setSuggestedCode() {
+      document.getElementById("hostCode").value = makeCode();
     }
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, m => ({
@@ -313,6 +334,13 @@
     });
 
     socket.on("error_msg", ({ message }) => {
+      if (message === "Room-Code nicht gefunden." && myRoomCode && myToken) {
+        localStorage.removeItem("schocken_code");
+        localStorage.removeItem("schocken_token");
+        localStorage.removeItem("schocken_seat");
+        myRoomCode = null; myToken = null; mySeat = -1;
+        document.getElementById("rejoinBox").style.display = "none";
+      }
       if (document.getElementById("lobby").style.display !== "none") showLobbyError(message);
       else showGameMessage(message, true);
     });
@@ -321,8 +349,9 @@
     document.getElementById("btnCreate").onclick = () => {
       const name = document.getElementById("hostName").value.trim();
       const useDeckel = document.getElementById("deckelToggle").checked;
+      const requestedCode = document.getElementById("hostCode").value.trim().toUpperCase();
       if (!name) return showLobbyError("Bitte Name eingeben.");
-      socket.emit("create_room", { name, useDeckel });
+      socket.emit("create_room", { name, useDeckel, requestedCode });
     };
 
     document.getElementById("btnJoin").onclick = () => {
@@ -369,7 +398,12 @@
       showLobbyError("Vergessen. Du kannst neu erstellen oder beitreten.");
     };
 
+    document.getElementById("btnNewCode").onclick = () => {
+      setSuggestedCode();
+    };
+
     window.onload = () => {
+      setSuggestedCode();
       if (myRoomCode && myToken) {
         document.getElementById("rejoinBox").style.display = "block";
       }
