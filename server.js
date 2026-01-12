@@ -179,7 +179,7 @@ function scoreKniffel(dice, category) {
       return { score: (hasStraight([1, 2, 3, 4]) || hasStraight([2, 3, 4, 5]) || hasStraight([3, 4, 5, 6])) ? 30 : 0, label: "Kleine Straße" };
     case "largeStraight":
       return { score: (hasStraight([1, 2, 3, 4, 5]) || hasStraight([2, 3, 4, 5, 6])) ? 40 : 0, label: "Große Straße" };
-    case "yahtzee": return { score: hasN(5) ? 50 : 0, label: "Kniffel" };
+    case "yahtzee": return { score: hasN(5) ? 50 : 0, label: "Yahtzee" };
     case "chance": return { score: sum, label: "Chance" };
     default: return { score: 0, label: "Unbekannt" };
   }
@@ -1064,7 +1064,7 @@ io.on("connection", (socket) => {
         state.finished = true;
         const maxScore = Math.max(...state.totals);
         const winners = state.players.filter((_, i) => state.totals[i] === maxScore);
-        state.message = `Kniffel beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
+        state.message = `Yahtzee beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
         io.to(room.code).emit("state_update", state);
         persistRooms();
         return;
