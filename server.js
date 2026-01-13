@@ -189,7 +189,9 @@ function createSchwimmenState(players) {
     lives: players.map(() => 3),
     eliminated: players.map(() => false),
     history: [],
-    fireResolved: false
+    fireResolved: false,
+    roundPending: false,
+    nextStartingSeat: null
   };
   setupSchwimmenRound(state, { resetScores: true });
   return state;
@@ -223,12 +225,21 @@ function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) 
   state.lastTurnsRemaining = null;
   state.finished = false;
   state.fireResolved = false;
+  state.roundPending = false;
+  state.nextStartingSeat = null;
   if (resetScores) {
     state.scores = [];
   }
   state.currentPlayer = typeof startingSeat === "number"
     ? startingSeat
     : (getActiveSchwimmenSeats(state)[0] ?? 0);
+}
+
+function startSchwimmenNextRound(state) {
+  const startSeat = typeof state.nextStartingSeat === "number"
+    ? state.nextStartingSeat
+    : (getActiveSchwimmenSeats(state)[0] ?? 0);
+  setupSchwimmenRound(state, { startingSeat: startSeat });
 }
 
 function refreshSchwimmenTable(state) {
@@ -296,7 +307,9 @@ function handleSchwimmenFeuer(state, seat) {
   }
 
   const startSeat = getNextActiveSchwimmenSeat(state, seat);
-  setupSchwimmenRound(state, { startingSeat: startSeat });
+  state.roundPending = true;
+  state.nextStartingSeat = startSeat;
+  state.currentPlayer = startSeat;
   state.message = message;
   return true;
 }
@@ -366,8 +379,13 @@ function finishSchwimmenRound(state) {
     return;
   }
 
-  const startSeat = getNextActiveSchwimmenSeat(state, state.currentPlayer);
-  setupSchwimmenRound(state, { startingSeat: startSeat });
+  const preferredStartSeat = losers[0];
+  const startSeat = (preferredStartSeat !== undefined && !state.eliminated?.[preferredStartSeat])
+    ? preferredStartSeat
+    : getNextActiveSchwimmenSeat(state, preferredStartSeat ?? state.currentPlayer);
+  state.roundPending = true;
+  state.nextStartingSeat = startSeat;
+  state.currentPlayer = startSeat;
 }
 
 function endSchwimmenTurn(state, { knocked } = { knocked: false }) {
@@ -1154,6 +1172,9 @@ io.on("connection", (socket) => {
     if (state.finished) {
       return socket.emit("error_msg", { message: "Spiel ist beendet." });
     }
+    if (state.roundPending) {
+      return socket.emit("error_msg", { message: "Runde ist beendet. Bitte neue Runde starten." });
+    }
 
     const hIndex = Number(handIndex);
     const tIndex = Number(tableIndex);
@@ -1193,6 +1214,9 @@ io.on("connection", (socket) => {
     if (state.finished) {
       return socket.emit("error_msg", { message: "Spiel ist beendet." });
     }
+    if (state.roundPending) {
+      return socket.emit("error_msg", { message: "Runde ist beendet. Bitte neue Runde starten." });
+    }
 
     const hand = state.hands[state.currentPlayer];
     if (!hand || hand.length !== 3 || state.tableCards.length !== 3) {
@@ -1227,6 +1251,9 @@ io.on("connection", (socket) => {
     if (state.finished) {
       return socket.emit("error_msg", { message: "Spiel ist beendet." });
     }
+    if (state.roundPending) {
+      return socket.emit("error_msg", { message: "Runde ist beendet. Bitte neue Runde starten." });
+    }
 
     state.passCount += 1;
     state.message = `${state.players[state.currentPlayer]} schiebt.`;
@@ -1257,6 +1284,9 @@ io.on("connection", (socket) => {
     if (state.finished) {
       return socket.emit("error_msg", { message: "Spiel ist beendet." });
     }
+    if (state.roundPending) {
+      return socket.emit("error_msg", { message: "Runde ist beendet. Bitte neue Runde starten." });
+    }
     if (state.knockedBy !== null) {
       return socket.emit("error_msg", { message: "Es wurde bereits geklopft." });
     }
@@ -1270,6 +1300,30 @@ io.on("connection", (socket) => {
     }
     endSchwimmenTurn(state, { knocked: true });
 
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("schwimmen_start_round", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const state = room.state;
+    if (state.gameType !== "schwimmen") return;
+    if (state.finished) {
+      return socket.emit("error_msg", { message: "Spiel ist beendet." });
+    }
+    if (!state.roundPending) {
+      return socket.emit("error_msg", { message: "Runde läuft bereits." });
+    }
+
+    const seatIndex = room.players.findIndex(p => p.socketId === socket.id);
+    if (seatIndex < 0) return;
+    if (typeof state.nextStartingSeat === "number" && seatIndex !== state.nextStartingSeat) {
+      return socket.emit("error_msg", { message: "Nur der Verlierer darf die nächste Runde starten." });
+    }
+
+    startSchwimmenNextRound(state);
     io.to(room.code).emit("state_update", state);
     persistRooms();
   });

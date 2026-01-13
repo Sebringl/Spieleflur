@@ -179,6 +179,7 @@
         <button id="schwimmenSwapAllBtn">Alle tauschen</button>
         <button id="schwimmenPassBtn">Schieben</button>
         <button id="schwimmenKnockBtn">Klopfen</button>
+        <button id="schwimmenNextRoundBtn" style="display:none;">Neue Runde starten</button>
       </div>
 
       <div id="schwimmenResult"></div>
@@ -842,12 +843,19 @@
       const swapAllBtn = document.getElementById("schwimmenSwapAllBtn");
       const passBtn = document.getElementById("schwimmenPassBtn");
       const knockBtn = document.getElementById("schwimmenKnockBtn");
+      const nextRoundBtn = document.getElementById("schwimmenNextRoundBtn");
 
-      const canActNow = myTurn && !state.finished;
+      const canActNow = myTurn && !state.finished && !state.roundPending;
       if (swapBtn) swapBtn.disabled = !canActNow || selectedHandIndex === null || selectedTableIndex === null;
       if (swapAllBtn) swapAllBtn.disabled = !canActNow;
       if (passBtn) passBtn.disabled = !canActNow;
       if (knockBtn) knockBtn.disabled = !canActNow || state.knockedBy !== null;
+      if (nextRoundBtn) {
+        const showNextRound = !!state.roundPending && !state.finished;
+        const canStartNext = showNextRound && mySeat === state.nextStartingSeat;
+        nextRoundBtn.style.display = showNextRound ? "inline-block" : "none";
+        nextRoundBtn.disabled = !canStartNext;
+      }
 
       document.getElementById("turnHint").textContent =
         myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
@@ -864,7 +872,10 @@
       const knockInfo = state.knockedBy !== null && !state.finished
         ? `Geklopft von ${state.players[state.knockedBy]} · noch ${state.lastTurnsRemaining} Züge`
         : "";
-      const info = [state.message, knockInfo].filter(Boolean).join(" · ");
+      const nextRoundInfo = state.roundPending && !state.finished
+        ? `Neue Runde wartet auf ${state.players[state.nextStartingSeat] ?? "?"}`
+        : "";
+      const info = [state.message, knockInfo, nextRoundInfo].filter(Boolean).join(" · ");
       document.getElementById("schwimmenResult").textContent = info;
 
       renderSchwimmenScores();
@@ -1221,6 +1232,11 @@
     document.getElementById("schwimmenKnockBtn").onclick = () => {
       if (!room || !isSchwimmenGame()) return;
       socket.emit("schwimmen_knock", { code: room.code });
+    };
+
+    document.getElementById("schwimmenNextRoundBtn").onclick = () => {
+      if (!room || !isSchwimmenGame()) return;
+      socket.emit("schwimmen_start_round", { code: room.code });
     };
 
     document.getElementById("btnBackToLobby").onclick = () => {
