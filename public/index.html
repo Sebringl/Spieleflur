@@ -86,7 +86,6 @@
           <option value="schocken">Schocken</option>
           <option value="kniffel">Yahtzee</option>
           <option value="schwimmen">Schwimmen</option>
-          <option value="arschloch">Arschloch</option>
         </select>
         <label class="deckel-inline" for="deckelToggle">
           <input type="checkbox" id="deckelToggle" />
@@ -203,22 +202,6 @@
       <div id="schwimmenScores" style="margin-top: 14px;"></div>
     </div>
 
-    <div id="arschlochView" style="display:none;">
-      <div class="small muted">Stapel</div>
-      <div class="card-row" id="arschlochPile"></div>
-
-      <div class="small muted">Deine Karten</div>
-      <div class="card-row" id="arschlochHand"></div>
-
-      <div class="card-actions">
-        <button id="arschlochPlayBtn">Ausspielen</button>
-        <button id="arschlochPassBtn">Passen</button>
-      </div>
-
-      <div id="arschlochResult"></div>
-      <div id="arschlochRanking" style="margin-top: 14px;"></div>
-    </div>
-
     <div id="historyTable" style="margin-top: 14px;"></div>
 
     <div id="backToLobbyWrap" style="margin-top: 14px;">
@@ -256,8 +239,7 @@
     const gameTypeLabels = {
       schocken: "Schocken",
       kniffel: "Yahtzee",
-      schwimmen: "Schwimmen",
-      arschloch: "Arschloch"
+      schwimmen: "Schwimmen"
     };
 
     let myToken    = localStorage.getItem("schocken_token") || null;
@@ -272,7 +254,6 @@
     let state = null;
     let selectedHandIndex = null;
     let selectedTableIndex = null;
-    let selectedArschlochIndices = [];
 
     function setView(view) {
       document.getElementById("lobby").style.display = (view === "lobby") ? "block" : "none";
@@ -359,14 +340,9 @@
       return room && room.settings && room.settings.gameType === "schwimmen";
     }
 
-    function isArschlochGame() {
-      return room && room.settings && room.settings.gameType === "arschloch";
-    }
-
     function getGameResultElement() {
       if (isKniffelGame()) return document.getElementById("kniffelResult");
       if (isSchwimmenGame()) return document.getElementById("schwimmenResult");
-      if (isArschlochGame()) return document.getElementById("arschlochResult");
       return document.getElementById("result");
     }
 
@@ -838,7 +814,6 @@
       document.getElementById("kniffelView").style.display = "none";
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("schwimmenView").style.display = "block";
-      document.getElementById("arschlochView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -927,145 +902,11 @@
       updateHistoryTable();
     }
 
-    function getArschlochRoleLabel(position, total) {
-      if (position === 0) return "Präsident";
-      if (position === 1) return "Vizepräsident";
-      if (position === total - 2) return "Vize-Arschloch";
-      if (position === total - 1) return "Arschloch";
-      return "Mittelstand";
-    }
-
-    function formatArschlochCard(card) {
-      if (!card) return "□";
-      return `${card.rank}${card.suit}`;
-    }
-
-    function renderArschlochPile() {
-      const pile = document.getElementById("arschlochPile");
-      if (!pile) return;
-      pile.innerHTML = "";
-      if (!state?.pile || state.pile.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "small muted";
-        empty.textContent = "Kein Stich aktiv.";
-        pile.appendChild(empty);
-        return;
-      }
-      state.pile.forEach(card => {
-        const el = document.createElement("div");
-        const isRed = card.suit === "♥" || card.suit === "♦";
-        el.className = `card${isRed ? " red" : ""}`;
-        el.textContent = formatArschlochCard(card);
-        pile.appendChild(el);
-      });
-    }
-
-    function renderArschlochHand() {
-      const handEl = document.getElementById("arschlochHand");
-      if (!handEl) return;
-      handEl.innerHTML = "";
-      const hand = state?.hands?.[mySeat] || [];
-      const validSelection = selectedArschlochIndices.filter(i => i >= 0 && i < hand.length);
-      selectedArschlochIndices = validSelection;
-      const selectedRanks = new Set(selectedArschlochIndices.map(i => hand[i]?.rank));
-      if (selectedRanks.size > 1) {
-        selectedArschlochIndices = [];
-      }
-      hand.forEach((card, idx) => {
-        const el = document.createElement("div");
-        const isRed = card.suit === "♥" || card.suit === "♦";
-        const isSelected = selectedArschlochIndices.includes(idx);
-        el.className = `card${isRed ? " red" : ""}${isSelected ? " selected" : ""}${isMyTurn() ? "" : " inactive"}`;
-        el.textContent = formatArschlochCard(card);
-        el.onclick = () => {
-          if (!isMyTurn()) return;
-          const rank = hand[idx]?.rank;
-          if (!rank) return;
-          if (selectedArschlochIndices.length > 0) {
-            const currentRank = hand[selectedArschlochIndices[0]]?.rank;
-            if (currentRank && currentRank !== rank) {
-              selectedArschlochIndices = [];
-            }
-          }
-          if (selectedArschlochIndices.includes(idx)) {
-            selectedArschlochIndices = selectedArschlochIndices.filter(i => i !== idx);
-          } else {
-            selectedArschlochIndices = [...selectedArschlochIndices, idx].sort((a, b) => a - b);
-          }
-          renderArschlochHand();
-          updateArschlochActions();
-        };
-        handEl.appendChild(el);
-      });
-    }
-
-    function updateArschlochActions() {
-      const playBtn = document.getElementById("arschlochPlayBtn");
-      const passBtn = document.getElementById("arschlochPassBtn");
-      const myTurn = isMyTurn();
-      if (playBtn) playBtn.disabled = !myTurn || selectedArschlochIndices.length === 0;
-      if (passBtn) passBtn.disabled = !myTurn;
-    }
-
-    function renderArschlochRanking() {
-      const rankingEl = document.getElementById("arschlochRanking");
-      if (!rankingEl) return;
-      const ranking = state?.ranking || [];
-      if (!ranking.length) {
-        rankingEl.textContent = "";
-        return;
-      }
-      const totalPlayers = state.players.length;
-      const lines = ranking.map((seat, idx) => {
-        const label = getArschlochRoleLabel(idx, totalPlayers);
-        return `${idx + 1}. ${state.players[seat]} (${label})`;
-      });
-      rankingEl.innerHTML = `<div class="small muted">Rangliste</div><div>${lines.join("<br />")}</div>`;
-    }
-
-    function renderArschlochGame() {
-      if (!state) return;
-      document.getElementById("kniffelView").style.display = "none";
-      document.getElementById("schockenView").style.display = "none";
-      document.getElementById("schwimmenView").style.display = "none";
-      document.getElementById("arschlochView").style.display = "block";
-
-      const currentName = state.players[state.currentPlayer] || "-";
-      document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
-
-      const colorIdx = state.currentPlayer % playerTextColors.length;
-      document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
-      document.body.style.backgroundColor = playerBgColors[colorIdx];
-
-      document.getElementById("turnHint").textContent =
-        isMyTurn() ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
-
-      renderArschlochPile();
-      renderArschlochHand();
-      renderArschlochRanking();
-      updateArschlochActions();
-
-      document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
-      updateDeckelToggleState();
-      updateLobbyVisibility();
-
-      const myTurnNow = isMyTurn();
-      if (myTurnNow && !wasMyTurn) {
-        notifyMyTurn(currentName);
-      }
-      wasMyTurn = myTurnNow;
-
-      if (state.message) showGameMessage(state.message, false);
-      const history = document.getElementById("historyTable");
-      if (history) history.innerHTML = "";
-    }
-
     function renderSchockenGame() {
       if (!state) return;
       document.getElementById("kniffelView").style.display = "none";
       document.getElementById("schockenView").style.display = "block";
       document.getElementById("schwimmenView").style.display = "none";
-      document.getElementById("arschlochView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -1121,8 +962,6 @@
         renderKniffelGame();
       } else if (isSchwimmenGame()) {
         renderSchwimmenGame();
-      } else if (isArschlochGame()) {
-        renderArschlochGame();
       } else {
         renderSchockenGame();
       }
@@ -1421,19 +1260,6 @@
       selectedHandIndex = null;
       selectedTableIndex = null;
       socket.emit("schwimmen_start_round", { code: room.code });
-    };
-
-    document.getElementById("arschlochPlayBtn").onclick = () => {
-      if (!room || !isArschlochGame()) return;
-      if (!selectedArschlochIndices.length) return;
-      socket.emit("arschloch_play", { code: room.code, indices: selectedArschlochIndices });
-      selectedArschlochIndices = [];
-    };
-
-    document.getElementById("arschlochPassBtn").onclick = () => {
-      if (!room || !isArschlochGame()) return;
-      socket.emit("arschloch_pass", { code: room.code });
-      selectedArschlochIndices = [];
     };
 
     document.getElementById("btnBackToLobby").onclick = () => {

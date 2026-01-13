@@ -61,7 +61,6 @@ function normalizeRoomGameType(value) {
   const candidate = String(value || "").trim().toLowerCase();
   if (candidate === "kniffel") return "kniffel";
   if (candidate === "schwimmen") return "schwimmen";
-  if (candidate === "arschloch") return "arschloch";
   return "schocken";
 }
 
@@ -219,88 +218,6 @@ function createSchwimmenState(players) {
   };
   setupSchwimmenRound(state, { resetScores: true });
   return state;
-}
-
-// ---- Arschloch (President) ----
-const ARSCHLOCH_RANKS = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"];
-const ARSCHLOCH_SUITS = ["♣", "♦", "♥", "♠"];
-const ARSCHLOCH_RANK_VALUE = Object.fromEntries(ARSCHLOCH_RANKS.map((rank, idx) => [rank, idx + 3]));
-
-function createArschlochDeck() {
-  const deck = [];
-  for (const suit of ARSCHLOCH_SUITS) {
-    for (const rank of ARSCHLOCH_RANKS) {
-      deck.push({ rank, suit });
-    }
-  }
-  return shuffleDeck(deck);
-}
-
-function sortArschlochHand(hand) {
-  return hand.sort((a, b) => {
-    const rankDiff = ARSCHLOCH_RANK_VALUE[a.rank] - ARSCHLOCH_RANK_VALUE[b.rank];
-    if (rankDiff !== 0) return rankDiff;
-    return ARSCHLOCH_SUITS.indexOf(a.suit) - ARSCHLOCH_SUITS.indexOf(b.suit);
-  });
-}
-
-function findArschlochStartingSeat(hands) {
-  let best = { seat: 0, rankValue: Infinity, suitValue: Infinity };
-  hands.forEach((hand, seat) => {
-    if (!hand.length) return;
-    const sorted = sortArschlochHand(hand.slice());
-    const card = sorted[0];
-    const candidate = {
-      seat,
-      rankValue: ARSCHLOCH_RANK_VALUE[card.rank],
-      suitValue: ARSCHLOCH_SUITS.indexOf(card.suit)
-    };
-    if (
-      candidate.rankValue < best.rankValue ||
-      (candidate.rankValue === best.rankValue && candidate.suitValue < best.suitValue)
-    ) {
-      best = candidate;
-    }
-  });
-  return best.seat;
-}
-
-function createArschlochState(players) {
-  const deck = createArschlochDeck();
-  const hands = players.map(() => []);
-  deck.forEach((card, index) => {
-    hands[index % players.length].push(card);
-  });
-  hands.forEach(hand => sortArschlochHand(hand));
-  const startingSeat = findArschlochStartingSeat(hands);
-
-  return {
-    gameType: "arschloch",
-    players,
-    currentPlayer: startingSeat,
-    hands,
-    pile: [],
-    lastPlay: null,
-    passes: players.map(() => false),
-    ranking: [],
-    finished: false,
-    message: ""
-  };
-}
-
-function getActiveArschlochSeats(state) {
-  return state.players
-    .map((_, i) => i)
-    .filter(i => state.hands[i]?.length > 0);
-}
-
-function getNextActiveArschlochSeat(state, fromSeat) {
-  const total = state.players.length;
-  for (let offset = 1; offset <= total; offset++) {
-    const seat = (fromSeat + offset) % total;
-    if (state.hands[seat]?.length > 0) return seat;
-  }
-  return fromSeat;
 }
 
 // Aktive (nicht eliminierte) Sitzplätze in Schwimmen.
@@ -529,19 +446,6 @@ function endSchwimmenTurn(state, { knocked } = { knocked: false }) {
     }
   }
   state.currentPlayer = getNextActiveSchwimmenSeat(state, currentSeat);
-}
-
-function normalizeArschlochSelection(indices, handLength) {
-  const raw = Array.isArray(indices) ? indices : [];
-  const unique = [...new Set(raw.map(index => Number(index)).filter(Number.isFinite))];
-  const filtered = unique.filter(index => index >= 0 && index < handLength);
-  return filtered.sort((a, b) => a - b);
-}
-
-function canBeatArschlochPlay(rank, count, lastPlay) {
-  if (!lastPlay) return true;
-  if (lastPlay.count !== count) return false;
-  return ARSCHLOCH_RANK_VALUE[rank] > ARSCHLOCH_RANK_VALUE[lastPlay.rank];
 }
 
 // Gemeinsamer Helfer für Würfelspiele: Würfel/Weitermachen zurücksetzen.
@@ -780,8 +684,6 @@ function startNewGame(room) {
     room.state = state;
   } else if (room.settings.gameType === "schwimmen") {
     room.state = createSchwimmenState(room.players.map(p => p.name));
-  } else if (room.settings.gameType === "arschloch") {
-    room.state = createArschlochState(room.players.map(p => p.name));
   } else {
     const state = createInitialState({ useDeckel: room.settings.useDeckel });
     state.players = room.players.map(p => p.name);
@@ -1479,109 +1381,6 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
-  socket.on("arschloch_play", ({ code, indices }) => {
-    const room = rooms.get(normalizeCode(code));
-    if (!room || room.status !== "running") return;
-
-    const check = canAct(room, socket.id);
-    if (!check.ok) return socket.emit("error_msg", { message: check.error });
-
-    const state = room.state;
-    if (state.gameType !== "arschloch") return;
-    if (state.finished) {
-      return socket.emit("error_msg", { message: "Spiel ist beendet." });
-    }
-
-    const hand = state.hands[state.currentPlayer];
-    if (!hand || hand.length === 0) {
-      return socket.emit("error_msg", { message: "Du hast keine Karten mehr." });
-    }
-
-    const normalizedIndices = normalizeArschlochSelection(indices, hand.length);
-    if (!normalizedIndices.length) {
-      return socket.emit("error_msg", { message: "Bitte Karten auswählen." });
-    }
-    const selectedCards = normalizedIndices.map(i => hand[i]);
-    const selectedRank = selectedCards[0]?.rank;
-    if (!selectedRank || selectedCards.some(card => card.rank !== selectedRank)) {
-      return socket.emit("error_msg", { message: "Es dürfen nur gleiche Karten ausgespielt werden." });
-    }
-
-    if (!canBeatArschlochPlay(selectedRank, selectedCards.length, state.lastPlay)) {
-      return socket.emit("error_msg", { message: "Diese Karten sind nicht hoch genug." });
-    }
-
-    normalizedIndices.sort((a, b) => b - a).forEach(index => {
-      hand.splice(index, 1);
-    });
-
-    state.pile = selectedCards;
-    state.lastPlay = { rank: selectedRank, count: selectedCards.length, player: state.currentPlayer };
-    state.passes = state.players.map((_, i) => state.hands[i]?.length === 0);
-
-    if (hand.length === 0 && !state.ranking.includes(state.currentPlayer)) {
-      state.ranking.push(state.currentPlayer);
-    }
-
-    const activeSeats = getActiveArschlochSeats(state);
-    if (activeSeats.length <= 1) {
-      const lastSeat = activeSeats[0];
-      if (lastSeat !== undefined && !state.ranking.includes(lastSeat)) {
-        state.ranking.push(lastSeat);
-      }
-      state.finished = true;
-      state.message = `Spiel beendet. Gewinner: ${state.players[state.ranking[0]]}.`;
-      io.to(room.code).emit("state_update", state);
-      persistRooms();
-      return;
-    }
-
-    state.message = `${state.players[state.currentPlayer]} spielt ${selectedCards.length}x ${selectedRank}.`;
-    state.currentPlayer = getNextActiveArschlochSeat(state, state.currentPlayer);
-
-    io.to(room.code).emit("state_update", state);
-    persistRooms();
-  });
-
-  socket.on("arschloch_pass", ({ code }) => {
-    const room = rooms.get(normalizeCode(code));
-    if (!room || room.status !== "running") return;
-
-    const check = canAct(room, socket.id);
-    if (!check.ok) return socket.emit("error_msg", { message: check.error });
-
-    const state = room.state;
-    if (state.gameType !== "arschloch") return;
-    if (state.finished) {
-      return socket.emit("error_msg", { message: "Spiel ist beendet." });
-    }
-    if (!state.lastPlay) {
-      return socket.emit("error_msg", { message: "Du musst den Stich eröffnen." });
-    }
-
-    state.passes[state.currentPlayer] = true;
-    const activeSeats = getActiveArschlochSeats(state);
-    const allPassed = activeSeats.every(seat => state.passes[seat]);
-    if (allPassed) {
-      const lastPlayer = state.lastPlay?.player;
-      state.pile = [];
-      state.lastPlay = null;
-      state.passes = state.players.map((_, i) => state.hands[i]?.length === 0);
-      if (typeof lastPlayer === "number" && state.hands[lastPlayer]?.length > 0) {
-        state.currentPlayer = lastPlayer;
-      } else {
-        state.currentPlayer = getNextActiveArschlochSeat(state, lastPlayer ?? state.currentPlayer);
-      }
-      state.message = `Stich beendet. ${state.players[state.currentPlayer]} eröffnet neu.`;
-    } else {
-      state.message = `${state.players[state.currentPlayer]} passt.`;
-      state.currentPlayer = getNextActiveArschlochSeat(state, state.currentPlayer);
-    }
-
-    io.to(room.code).emit("state_update", state);
-    persistRooms();
-  });
-
   socket.on("leave_room", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -1662,9 +1461,6 @@ io.on("connection", (socket) => {
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
     }
-    if (state.gameType === "arschloch") {
-      return socket.emit("error_msg", { message: "Diese Aktion ist in Arschloch nicht verfügbar." });
-    }
 
     if (state.throwCount >= state.maxThrowsThisRound) {
       return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
@@ -1704,9 +1500,6 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
-    }
-    if (state.gameType === "arschloch") {
-      return socket.emit("error_msg", { message: "Diese Aktion ist in Arschloch nicht verfügbar." });
     }
 
     if (![0, 1, 2].includes(i)) return;
@@ -1790,9 +1583,6 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
-    }
-    if (state.gameType === "arschloch") {
-      return socket.emit("error_msg", { message: "Diese Aktion ist in Arschloch nicht verfügbar." });
     }
 
     if (state.throwCount === 0 || state.dice.includes(null)) {
