@@ -162,6 +162,7 @@ function cardValue(rank) {
 function scoreSchwimmenHand(hand) {
   if (!hand || hand.length === 0) return 0;
   const ranks = hand.map(card => card.rank);
+  if (ranks.every(rank => rank === "A")) return 33;
   if (ranks.every(rank => rank === ranks[0])) return 30.5;
   const suitTotals = {};
   hand.forEach(card => {
@@ -187,7 +188,8 @@ function createSchwimmenState(players) {
     roundNumber: 1,
     lives: players.map(() => 3),
     eliminated: players.map(() => false),
-    history: []
+    history: [],
+    fireResolved: false
   };
   setupSchwimmenRound(state, { resetScores: true });
   return state;
@@ -220,6 +222,7 @@ function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) 
   state.knockedBy = null;
   state.lastTurnsRemaining = null;
   state.finished = false;
+  state.fireResolved = false;
   if (resetScores) {
     state.scores = [];
   }
@@ -230,13 +233,72 @@ function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) 
 
 function refreshSchwimmenTable(state) {
   if (state.deck.length < 3) {
-    state.message = "Alle passen – nicht genug Karten zum Erneuern.";
+    state.message = "Alle schieben – nicht genug Karten zum Erneuern.";
     state.passCount = 0;
     return;
   }
   state.tableCards = state.deck.splice(0, 3);
-  state.message = "Alle passen – Tischkarten wurden erneuert.";
+  state.message = "Alle schieben – Tischkarten wurden erneuert.";
   state.passCount = 0;
+}
+
+function applySchwimmenLifeLoss(state, seat) {
+  if (state.lives[seat] > 0) {
+    state.lives[seat] -= 1;
+    return { swimmingNow: state.lives[seat] === 0 };
+  }
+  state.eliminated[seat] = true;
+  return { eliminatedNow: true };
+}
+
+function handleSchwimmenFeuer(state, seat) {
+  if (state.finished || state.fireResolved) return false;
+  const hand = state.hands?.[seat];
+  if (!hand || hand.length !== 3) return false;
+  if (!hand.every(card => card.rank === "A")) return false;
+
+  state.fireResolved = true;
+
+  const activeSeats = getActiveSchwimmenSeats(state).filter(i => i !== seat);
+  const swimmingNow = [];
+  const eliminatedNow = [];
+
+  activeSeats.forEach(otherSeat => {
+    const result = applySchwimmenLifeLoss(state, otherSeat);
+    if (result?.swimmingNow) swimmingNow.push(otherSeat);
+    if (result?.eliminatedNow) eliminatedNow.push(otherSeat);
+  });
+
+  let message = `Feuer! ${state.players[seat]} deckt drei Asse auf. Alle anderen verlieren ein Leben.`;
+  if (swimmingNow.length) {
+    message += ` ${swimmingNow.map(i => state.players[i]).join(", ")} schwimmt jetzt.`;
+  }
+  if (eliminatedNow.length) {
+    message += ` ${eliminatedNow.map(i => state.players[i]).join(", ")} geht unter.`;
+  }
+
+  state.history.push(state.players.map((_, i) => ({
+    score: scoreSchwimmenHand(state.hands[i]),
+    lives: state.lives[i],
+    eliminated: state.eliminated[i],
+    swimming: state.lives[i] === 0 && !state.eliminated[i]
+  })));
+  state.roundNumber += 1;
+
+  const remaining = getActiveSchwimmenSeats(state);
+  if (remaining.length <= 1) {
+    const winnerSeat = remaining[0];
+    state.finished = true;
+    state.message = winnerSeat !== undefined
+      ? `${message} Gesamtsieger: ${state.players[winnerSeat]}.`
+      : message;
+    return true;
+  }
+
+  const startSeat = getNextActiveSchwimmenSeat(state, seat);
+  setupSchwimmenRound(state, { startingSeat: startSeat });
+  state.message = message;
+  return true;
 }
 
 function finishSchwimmenRound(state) {
@@ -1108,6 +1170,11 @@ io.on("connection", (socket) => {
     state.tableCards[tIndex] = temp;
     state.passCount = 0;
     state.message = `${state.players[state.currentPlayer]} tauscht eine Karte.`;
+    if (handleSchwimmenFeuer(state, state.currentPlayer)) {
+      io.to(room.code).emit("state_update", state);
+      persistRooms();
+      return;
+    }
     endSchwimmenTurn(state);
 
     io.to(room.code).emit("state_update", state);
@@ -1137,6 +1204,11 @@ io.on("connection", (socket) => {
     state.tableCards = temp;
     state.passCount = 0;
     state.message = `${state.players[state.currentPlayer]} tauscht alle Karten.`;
+    if (handleSchwimmenFeuer(state, state.currentPlayer)) {
+      io.to(room.code).emit("state_update", state);
+      persistRooms();
+      return;
+    }
     endSchwimmenTurn(state);
 
     io.to(room.code).emit("state_update", state);
@@ -1157,10 +1229,15 @@ io.on("connection", (socket) => {
     }
 
     state.passCount += 1;
-    state.message = `${state.players[state.currentPlayer]} passt.`;
+    state.message = `${state.players[state.currentPlayer]} schiebt.`;
     const activeCount = getActiveSchwimmenSeats(state).length;
     if (state.passCount >= activeCount) {
       refreshSchwimmenTable(state);
+    }
+    if (handleSchwimmenFeuer(state, state.currentPlayer)) {
+      io.to(room.code).emit("state_update", state);
+      persistRooms();
+      return;
     }
     endSchwimmenTurn(state);
 
@@ -1186,6 +1263,11 @@ io.on("connection", (socket) => {
 
     state.passCount = 0;
     state.message = `${state.players[state.currentPlayer]} klopft.`;
+    if (handleSchwimmenFeuer(state, state.currentPlayer)) {
+      io.to(room.code).emit("state_update", state);
+      persistRooms();
+      return;
+    }
     endSchwimmenTurn(state, { knocked: true });
 
     io.to(room.code).emit("state_update", state);
