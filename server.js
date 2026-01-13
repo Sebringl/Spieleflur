@@ -57,6 +57,13 @@ function normalizeGameType(value) {
   return DEFAULT_GAME_TYPE;
 }
 
+function normalizeRoomGameType(value) {
+  const candidate = String(value || "").trim().toLowerCase();
+  if (candidate === "kniffel") return "kniffel";
+  if (candidate === "schwimmen") return "schwimmen";
+  return "schocken";
+}
+
 // ---- Game State ----
 function createInitialState({ useDeckel }) {
   return {
@@ -124,6 +131,98 @@ function createKniffelState() {
     message: "",
     finished: false
   };
+}
+
+function shuffleDeck(deck) {
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function createSchwimmenDeck() {
+  const suits = ["♠", "♥", "♦", "♣"];
+  const ranks = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+  const deck = [];
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      deck.push({ suit, rank });
+    }
+  }
+  return shuffleDeck(deck);
+}
+
+function cardValue(rank) {
+  if (rank === "A") return 11;
+  if (["K", "Q", "J", "10"].includes(rank)) return 10;
+  return Number(rank);
+}
+
+function scoreSchwimmenHand(hand) {
+  if (!hand || hand.length === 0) return 0;
+  const ranks = hand.map(card => card.rank);
+  if (ranks.every(rank => rank === ranks[0])) return 30.5;
+  const suitTotals = {};
+  hand.forEach(card => {
+    suitTotals[card.suit] = (suitTotals[card.suit] || 0) + cardValue(card.rank);
+  });
+  return Math.max(...Object.values(suitTotals));
+}
+
+function createSchwimmenState(players) {
+  const deck = createSchwimmenDeck();
+  const hands = players.map(() => deck.splice(0, 3));
+  const tableCards = deck.splice(0, 3);
+  return {
+    gameType: "schwimmen",
+    players,
+    currentPlayer: 0,
+    deck,
+    hands,
+    tableCards,
+    passCount: 0,
+    knockedBy: null,
+    lastTurnsRemaining: null,
+    finished: false,
+    scores: [],
+    message: ""
+  };
+}
+
+function refreshSchwimmenTable(state) {
+  if (state.deck.length < 3) {
+    state.message = "Alle passen – nicht genug Karten zum Erneuern.";
+    state.passCount = 0;
+    return;
+  }
+  state.tableCards = state.deck.splice(0, 3);
+  state.message = "Alle passen – Tischkarten wurden erneuert.";
+  state.passCount = 0;
+}
+
+function finishSchwimmenRound(state) {
+  state.scores = state.hands.map(hand => scoreSchwimmenHand(hand));
+  const maxScore = Math.max(...state.scores);
+  const winners = state.players.filter((_, i) => state.scores[i] === maxScore);
+  state.finished = true;
+  state.message = `Schwimmen beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
+}
+
+function endSchwimmenTurn(state, { knocked } = { knocked: false }) {
+  if (state.finished) return;
+  const currentSeat = state.currentPlayer;
+  if (knocked && state.knockedBy === null) {
+    state.knockedBy = currentSeat;
+    state.lastTurnsRemaining = state.players.length - 1;
+  } else if (state.knockedBy !== null && currentSeat !== state.knockedBy) {
+    state.lastTurnsRemaining = Math.max(0, (state.lastTurnsRemaining ?? 0) - 1);
+    if (state.lastTurnsRemaining <= 0) {
+      finishSchwimmenRound(state);
+      return;
+    }
+  }
+  state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
 }
 
 function resetTurn(state) {
@@ -352,6 +451,8 @@ function startNewGame(room) {
     state.totals = state.players.map(_ => 0);
     state.currentPlayer = 0;
     room.state = state;
+  } else if (room.settings.gameType === "schwimmen") {
+    room.state = createSchwimmenState(room.players.map(p => p.name));
   } else {
     const state = createInitialState({ useDeckel: room.settings.useDeckel });
     state.players = room.players.map(p => p.name);
@@ -515,7 +616,7 @@ function emitPendingRequests(room) {
 }
 
 function updateRoomSettings({ room, useDeckel, gameType }) {
-  const nextGameType = gameType === "kniffel" ? "kniffel" : "schocken";
+  const nextGameType = normalizeRoomGameType(gameType);
   room.settings.gameType = nextGameType;
   room.settings.useDeckel = nextGameType === "schocken" ? !!useDeckel : false;
 }
@@ -621,10 +722,11 @@ function createRoom({ socket, name, useDeckel, gameType, requestedCode }) {
   }
 
   const token = makeToken();
+  const normalizedGameType = normalizeRoomGameType(gameType);
   const room = {
     code,
     status: "lobby",
-    settings: { useDeckel: !!useDeckel, gameType: "schocken" },
+    settings: { useDeckel: normalizedGameType === "schocken" ? !!useDeckel : false, gameType: normalizedGameType },
     hostToken: token,
     hostSeat: 0,
     lastLobbyActivity: Date.now(),
@@ -688,16 +790,12 @@ async function loadRooms() {
     data.forEach(room => {
       const normalizedCode = normalizeCode(room.code);
       if (!normalizedCode) return;
-      const settings = {
-        useDeckel: !!room.settings?.useDeckel,
-        gameType: normalizeGameType(room.settings?.gameType)
-      };
       rooms.set(normalizedCode, {
         ...room,
         code: normalizedCode,
         settings: {
           useDeckel: !!room.settings?.useDeckel,
-          gameType: room.settings?.gameType === "kniffel" ? "kniffel" : "schocken"
+          gameType: normalizeRoomGameType(room.settings?.gameType)
         },
         lastLobbyActivity: room.lastLobbyActivity || Date.now(),
         lobbyWarnedAt: null,
@@ -882,6 +980,117 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  socket.on("schwimmen_swap", ({ code, handIndex, tableIndex }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const state = room.state;
+    if (state.gameType !== "schwimmen") return;
+    if (state.finished) {
+      return socket.emit("error_msg", { message: "Spiel ist beendet." });
+    }
+
+    const hIndex = Number(handIndex);
+    const tIndex = Number(tableIndex);
+    if (![0, 1, 2].includes(hIndex) || ![0, 1, 2].includes(tIndex)) {
+      return socket.emit("error_msg", { message: "Ungültige Kartenwahl." });
+    }
+    const hand = state.hands[state.currentPlayer];
+    if (!hand || !hand[hIndex] || !state.tableCards[tIndex]) {
+      return socket.emit("error_msg", { message: "Ungültige Kartenwahl." });
+    }
+
+    const temp = hand[hIndex];
+    hand[hIndex] = state.tableCards[tIndex];
+    state.tableCards[tIndex] = temp;
+    state.passCount = 0;
+    state.message = `${state.players[state.currentPlayer]} tauscht eine Karte.`;
+    endSchwimmenTurn(state);
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("schwimmen_swap_all", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const state = room.state;
+    if (state.gameType !== "schwimmen") return;
+    if (state.finished) {
+      return socket.emit("error_msg", { message: "Spiel ist beendet." });
+    }
+
+    const hand = state.hands[state.currentPlayer];
+    if (!hand || hand.length !== 3 || state.tableCards.length !== 3) {
+      return socket.emit("error_msg", { message: "Karten fehlen." });
+    }
+
+    const temp = hand.slice();
+    state.hands[state.currentPlayer] = state.tableCards.slice();
+    state.tableCards = temp;
+    state.passCount = 0;
+    state.message = `${state.players[state.currentPlayer]} tauscht alle Karten.`;
+    endSchwimmenTurn(state);
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("schwimmen_pass", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const state = room.state;
+    if (state.gameType !== "schwimmen") return;
+    if (state.finished) {
+      return socket.emit("error_msg", { message: "Spiel ist beendet." });
+    }
+
+    state.passCount += 1;
+    state.message = `${state.players[state.currentPlayer]} passt.`;
+    if (state.passCount >= state.players.length) {
+      refreshSchwimmenTable(state);
+    }
+    endSchwimmenTurn(state);
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("schwimmen_knock", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const state = room.state;
+    if (state.gameType !== "schwimmen") return;
+    if (state.finished) {
+      return socket.emit("error_msg", { message: "Spiel ist beendet." });
+    }
+    if (state.knockedBy !== null) {
+      return socket.emit("error_msg", { message: "Es wurde bereits geklopft." });
+    }
+
+    state.passCount = 0;
+    state.message = `${state.players[state.currentPlayer]} klopft.`;
+    endSchwimmenTurn(state, { knocked: true });
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
   socket.on("leave_room", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -959,6 +1168,9 @@ io.on("connection", (socket) => {
       persistRooms();
       return;
     }
+    if (state.gameType === "schwimmen") {
+      return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
+    }
 
     if (state.throwCount >= state.maxThrowsThisRound) {
       return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
@@ -995,6 +1207,9 @@ io.on("connection", (socket) => {
       io.to(room.code).emit("state_update", state);
       persistRooms();
       return;
+    }
+    if (state.gameType === "schwimmen") {
+      return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
     }
 
     if (![0, 1, 2].includes(i)) return;
@@ -1075,6 +1290,9 @@ io.on("connection", (socket) => {
       io.to(room.code).emit("state_update", state);
       persistRooms();
       return;
+    }
+    if (state.gameType === "schwimmen") {
+      return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
     }
 
     if (state.throwCount === 0 || state.dice.includes(null)) {

@@ -51,6 +51,12 @@
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
     .kniffel-select { width: min(360px, 92%); font-size: 16px; padding: 8px; margin: 6px auto; }
     #kniffelView .die { font-size: clamp(56px, 14vw, 130px); line-height: clamp(56px, 14vw, 130px); }
+    .card-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+    .card { width: 80px; height: 110px; border: 1px solid #ccc; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: #fff; cursor: pointer; user-select: none; }
+    .card.inactive { cursor: default; opacity: 0.6; }
+    .card.selected { border-color: #2e7d32; box-shadow: 0 0 0 2px #a5d6a7; }
+    .card.red { color: #c62828; }
+    .card-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   </style>
 </head>
 <body>
@@ -63,6 +69,7 @@
         <select id="gameTypeSelect">
           <option value="schocken">Schocken</option>
           <option value="kniffel">Yahtzee</option>
+          <option value="schwimmen">Schwimmen</option>
         </select>
         <label class="deckel-inline" for="deckelToggle">
           <input type="checkbox" id="deckelToggle" />
@@ -161,6 +168,24 @@
       <div id="kniffelScoreTable" style="margin-top: 14px;"></div>
     </div>
 
+    <div id="schwimmenView" style="display:none;">
+      <div class="small muted">Tischkarten</div>
+      <div class="card-row" id="schwimmenTable"></div>
+
+      <div class="small muted">Deine Karten</div>
+      <div class="card-row" id="schwimmenHand"></div>
+
+      <div class="card-actions">
+        <button id="schwimmenSwapBtn">1 Karte tauschen</button>
+        <button id="schwimmenSwapAllBtn">Alle tauschen</button>
+        <button id="schwimmenPassBtn">Passen</button>
+        <button id="schwimmenKnockBtn">Klopfen</button>
+      </div>
+
+      <div id="schwimmenResult"></div>
+      <div id="schwimmenScores" style="margin-top: 14px;"></div>
+    </div>
+
     <div id="backToLobbyWrap" style="margin-top: 14px;">
       <button id="btnBackToLobby">Zurück zur Lobby</button>
       <div class="small">Beendet das Spiel und löscht den Fortschritt.</div>
@@ -193,6 +218,11 @@
       { key: "yahtzee", label: "Yahtzee" },
       { key: "chance", label: "Chance" }
     ];
+    const gameTypeLabels = {
+      schocken: "Schocken",
+      kniffel: "Yahtzee",
+      schwimmen: "Schwimmen"
+    };
 
     let myToken    = localStorage.getItem("schocken_token") || null;
     let myRoomCode = localStorage.getItem("schocken_code") || null;
@@ -204,13 +234,16 @@
 
     let room = null;
     let state = null;
+    let selectedHandIndex = null;
+    let selectedTableIndex = null;
 
     function setView(view) {
       document.getElementById("lobby").style.display = (view === "lobby") ? "block" : "none";
       document.getElementById("game").style.display  = (view === "game") ? "block" : "none";
       const title = document.getElementById("pageTitle");
       if (title) {
-        const gameTitle = (room && room.settings && room.settings.gameType === "kniffel") ? "Yahtzee" : "Schocken";
+        const typeKey = room?.settings?.gameType || "schocken";
+        const gameTitle = gameTypeLabels[typeKey] || "Schocken";
         title.textContent = (view === "game" && room && room.code) ? `${gameTitle} (${room.code})` : `${gameTitle} (Lobby)`;
       }
     }
@@ -243,7 +276,8 @@
       return true;
     }
     function showGameMessage(msg, isError=false) {
-      const el = isKniffelGame() ? document.getElementById("kniffelResult") : document.getElementById("result");
+      const el = getGameResultElement();
+      if (!el) return;
       el.textContent = msg || "";
       el.style.color = isError ? "red" : "black";
     }
@@ -265,11 +299,11 @@
       }[m]));
     }
     function getGameTypeLabel(value) {
-      return gameTypeLabels[value] || "Klassisch";
+      return gameTypeLabels[value] || "Schocken";
     }
     function getSelectedGameType() {
       const select = document.getElementById("gameTypeSelect");
-      return select ? select.value : "classic";
+      return select ? select.value : "schocken";
     }
 
     function isMyTurn() {
@@ -278,6 +312,16 @@
 
     function isKniffelGame() {
       return room && room.settings && room.settings.gameType === "kniffel";
+    }
+
+    function isSchwimmenGame() {
+      return room && room.settings && room.settings.gameType === "schwimmen";
+    }
+
+    function getGameResultElement() {
+      if (isKniffelGame()) return document.getElementById("kniffelResult");
+      if (isSchwimmenGame()) return document.getElementById("schwimmenResult");
+      return document.getElementById("result");
     }
 
     async function notifyMyTurn(playerName) {
@@ -389,8 +433,12 @@
       const settingsSummary = document.getElementById("roomSettingsSummary");
       if (settingsSummary && room?.settings) {
         const typeLabel = getGameTypeLabel(room.settings.gameType);
-        const deckelLabel = room.settings.useDeckel ? "mit Deckeln" : "ohne Deckel";
-        settingsSummary.textContent = `Einstellungen: ${typeLabel} · ${deckelLabel}`;
+        if (room.settings.gameType === "schocken") {
+          const deckelLabel = room.settings.useDeckel ? "mit Deckeln" : "ohne Deckel";
+          settingsSummary.textContent = `Einstellungen: ${typeLabel} · ${deckelLabel}`;
+        } else {
+          settingsSummary.textContent = `Einstellungen: ${typeLabel}`;
+        }
       }
       if (!room || room.status !== "lobby") {
         showLobbyExpiryNotice("");
@@ -450,7 +498,7 @@
       let html = "<h4>Aktive Lobbys</h4>";
       lobbies.forEach(lobby => {
         const host = escapeHtml(lobby.hostName || "Host");
-        const gameLabel = lobby.gameType === "kniffel" ? "Yahtzee" : "Schocken";
+        const gameLabel = gameTypeLabels[lobby.gameType] || "Schocken";
         html += `<div class="lobby-item">
           <div>
             <div><strong>${lobby.code}</strong> · ${host}</div>
@@ -601,6 +649,7 @@
       if (!state) return;
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("kniffelView").style.display = "block";
+      document.getElementById("schwimmenView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -649,10 +698,140 @@
       renderKniffelScoreTable();
     }
 
+    function formatSchwimmenCard(card) {
+      if (!card) return "🂠";
+      return `${card.rank}${card.suit}`;
+    }
+
+    function isRedSuit(card) {
+      return card && (card.suit === "♥" || card.suit === "♦");
+    }
+
+    function renderSchwimmenRow(container, cards, { selectable, selectedIndex, onSelect, hideCards }) {
+      if (!container) return;
+      container.innerHTML = "";
+      cards.forEach((card, index) => {
+        const el = document.createElement("div");
+        el.className = "card";
+        if (hideCards) {
+          el.textContent = "🂠";
+          el.classList.add("inactive");
+        } else {
+          el.textContent = formatSchwimmenCard(card);
+          if (isRedSuit(card)) el.classList.add("red");
+        }
+        if (selectedIndex === index) el.classList.add("selected");
+        if (!selectable) el.classList.add("inactive");
+        if (selectable && !hideCards) {
+          el.onclick = () => onSelect(index);
+        }
+        container.appendChild(el);
+      });
+    }
+
+    function renderSchwimmenScores() {
+      const container = document.getElementById("schwimmenScores");
+      if (!container) return;
+      if (!state || !state.scores || state.scores.length === 0) {
+        container.innerHTML = "";
+        return;
+      }
+      let html = "<table class='score-table'><thead><tr><th>Spieler</th><th>Punkte</th></tr></thead><tbody>";
+      state.players.forEach((name, index) => {
+        const score = state.scores[index];
+        html += `<tr><td>${escapeHtml(name)}</td><td>${score ?? "-"}</td></tr>`;
+      });
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    function renderSchwimmenGame() {
+      if (!state) return;
+      document.getElementById("kniffelView").style.display = "none";
+      document.getElementById("schockenView").style.display = "none";
+      document.getElementById("schwimmenView").style.display = "block";
+
+      const currentName = state.players[state.currentPlayer] || "-";
+      document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
+
+      const colorIdx = state.currentPlayer % playerTextColors.length;
+      document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
+      document.body.style.backgroundColor = playerBgColors[colorIdx];
+
+      const myTurn = isMyTurn();
+      if (!myTurn || state.finished) {
+        selectedHandIndex = null;
+        selectedTableIndex = null;
+      }
+      const myHand = mySeat >= 0 ? (state.hands?.[mySeat] || []) : [null, null, null];
+      const tableCards = state.tableCards || [];
+
+      renderSchwimmenRow(
+        document.getElementById("schwimmenTable"),
+        tableCards,
+        {
+          selectable: myTurn && !state.finished,
+          selectedIndex: selectedTableIndex,
+          onSelect: (index) => {
+            if (!myTurn) return;
+            selectedTableIndex = selectedTableIndex === index ? null : index;
+            renderSchwimmenGame();
+          },
+          hideCards: false
+        }
+      );
+      renderSchwimmenRow(
+        document.getElementById("schwimmenHand"),
+        myHand,
+        {
+          selectable: myTurn && !state.finished,
+          selectedIndex: selectedHandIndex,
+          onSelect: (index) => {
+            if (!myTurn) return;
+            selectedHandIndex = selectedHandIndex === index ? null : index;
+            renderSchwimmenGame();
+          },
+          hideCards: mySeat < 0 && !state.finished
+        }
+      );
+
+      const swapBtn = document.getElementById("schwimmenSwapBtn");
+      const swapAllBtn = document.getElementById("schwimmenSwapAllBtn");
+      const passBtn = document.getElementById("schwimmenPassBtn");
+      const knockBtn = document.getElementById("schwimmenKnockBtn");
+
+      const canActNow = myTurn && !state.finished;
+      if (swapBtn) swapBtn.disabled = !canActNow || selectedHandIndex === null || selectedTableIndex === null;
+      if (swapAllBtn) swapAllBtn.disabled = !canActNow;
+      if (passBtn) passBtn.disabled = !canActNow;
+      if (knockBtn) knockBtn.disabled = !canActNow || state.knockedBy !== null;
+
+      document.getElementById("turnHint").textContent =
+        myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
+      updateDeckelToggleState();
+      updateLobbyVisibility();
+
+      const myTurnNow = myTurn;
+      if (myTurnNow && !wasMyTurn) {
+        notifyMyTurn(currentName);
+      }
+      wasMyTurn = myTurnNow;
+
+      const knockInfo = state.knockedBy !== null && !state.finished
+        ? `Geklopft von ${state.players[state.knockedBy]} · noch ${state.lastTurnsRemaining} Züge`
+        : "";
+      const info = [state.message, knockInfo].filter(Boolean).join(" · ");
+      document.getElementById("schwimmenResult").textContent = info;
+
+      renderSchwimmenScores();
+    }
+
     function renderSchockenGame() {
       if (!state) return;
       document.getElementById("kniffelView").style.display = "none";
       document.getElementById("schockenView").style.display = "block";
+      document.getElementById("schwimmenView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -706,6 +885,8 @@
       if (!state) return;
       if (isKniffelGame()) {
         renderKniffelGame();
+      } else if (isSchwimmenGame()) {
+        renderSchwimmenGame();
       } else {
         renderSchockenGame();
       }
@@ -973,6 +1154,31 @@
       updateKniffelEndButton();
     };
 
+    document.getElementById("schwimmenSwapBtn").onclick = () => {
+      if (!room || !isSchwimmenGame()) return;
+      if (selectedHandIndex === null || selectedTableIndex === null) return;
+      socket.emit("schwimmen_swap", {
+        code: room.code,
+        handIndex: selectedHandIndex,
+        tableIndex: selectedTableIndex
+      });
+    };
+
+    document.getElementById("schwimmenSwapAllBtn").onclick = () => {
+      if (!room || !isSchwimmenGame()) return;
+      socket.emit("schwimmen_swap_all", { code: room.code });
+    };
+
+    document.getElementById("schwimmenPassBtn").onclick = () => {
+      if (!room || !isSchwimmenGame()) return;
+      socket.emit("schwimmen_pass", { code: room.code });
+    };
+
+    document.getElementById("schwimmenKnockBtn").onclick = () => {
+      if (!room || !isSchwimmenGame()) return;
+      socket.emit("schwimmen_knock", { code: room.code });
+    };
+
     document.getElementById("btnBackToLobby").onclick = () => {
       if (isHost && room && myToken) {
         const ok = window.confirm("Zurück zur Lobby? Das beendet das Spiel und löscht den Fortschritt.");
@@ -1119,7 +1325,7 @@
       const select = document.getElementById("gameTypeSelect");
       if (!select) return;
       if (room && room.status === "lobby") {
-        select.value = room.settings?.gameType || "classic";
+        select.value = room.settings?.gameType || "schocken";
       }
       select.disabled = !!room && (!isHost || room.status !== "lobby");
     }
