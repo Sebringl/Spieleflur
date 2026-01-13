@@ -65,6 +65,7 @@ function normalizeRoomGameType(value) {
 }
 
 // ---- Game State ----
+// Initialzustand für Schocken (Würfelspiel).
 function createInitialState({ useDeckel }) {
   return {
     gameType: "schocken",
@@ -101,6 +102,7 @@ function createInitialState({ useDeckel }) {
   };
 }
 
+// Kategorienliste für Kniffel.
 const KNIFFEL_CATEGORIES = [
   "ones",
   "twos",
@@ -117,6 +119,7 @@ const KNIFFEL_CATEGORIES = [
   "chance"
 ];
 
+// Initialzustand für Kniffel.
 function createKniffelState() {
   return {
     gameType: "kniffel",
@@ -133,6 +136,7 @@ function createKniffelState() {
   };
 }
 
+// Fisher-Yates zum Mischen eines Kartenstapels (Schwimmen).
 function shuffleDeck(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -141,6 +145,7 @@ function shuffleDeck(deck) {
   return deck;
 }
 
+// Erzeugt und mischt das Schwimmen-Deck.
 function createSchwimmenDeck() {
   const suits = ["♠", "♥", "♦", "♣"];
   const ranks = ["7", "8", "9", "10", "J", "Q", "K", "A"];
@@ -153,12 +158,14 @@ function createSchwimmenDeck() {
   return shuffleDeck(deck);
 }
 
+// Kartenwert für Schwimmen (A=11, Bildkarten=10).
 function cardValue(rank) {
   if (rank === "A") return 11;
   if (["K", "Q", "J", "10"].includes(rank)) return 10;
   return Number(rank);
 }
 
+// Wertet eine Schwimmen-Hand aus.
 function scoreSchwimmenHand(hand) {
   if (!hand || hand.length === 0) return 0;
   const ranks = hand.map(card => card.rank);
@@ -171,6 +178,7 @@ function scoreSchwimmenHand(hand) {
   return Math.max(...Object.values(suitTotals));
 }
 
+// Initialzustand für Schwimmen inkl. erster Runde.
 function createSchwimmenState(players) {
   const state = {
     gameType: "schwimmen",
@@ -197,12 +205,14 @@ function createSchwimmenState(players) {
   return state;
 }
 
+// Aktive (nicht eliminierte) Sitzplätze in Schwimmen.
 function getActiveSchwimmenSeats(state) {
   return state.players
     .map((_, i) => i)
     .filter(i => !state.eliminated?.[i]);
 }
 
+// Nächster aktiver Sitzplatz im Uhrzeigersinn.
 function getNextActiveSchwimmenSeat(state, fromSeat) {
   const total = state.players.length;
   for (let offset = 1; offset <= total; offset++) {
@@ -212,6 +222,7 @@ function getNextActiveSchwimmenSeat(state, fromSeat) {
   return fromSeat;
 }
 
+// Richtet eine neue Schwimmen-Runde ein.
 function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) {
   const deck = createSchwimmenDeck();
   state.deck = deck;
@@ -235,6 +246,7 @@ function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) 
     : (getActiveSchwimmenSeats(state)[0] ?? 0);
 }
 
+// Startet die nächste Runde mit dem gemerkten Startspieler.
 function startSchwimmenNextRound(state) {
   const startSeat = typeof state.nextStartingSeat === "number"
     ? state.nextStartingSeat
@@ -242,6 +254,7 @@ function startSchwimmenNextRound(state) {
   setupSchwimmenRound(state, { startingSeat: startSeat });
 }
 
+// Erneuert die Tischkarten (Schwimmen).
 function refreshSchwimmenTable(state) {
   if (state.deck.length < 3) {
     state.message = "Alle schieben – nicht genug Karten zum Erneuern.";
@@ -253,6 +266,7 @@ function refreshSchwimmenTable(state) {
   state.passCount = 0;
 }
 
+// Verliert ein Leben oder wird eliminiert (Schwimmen).
 function applySchwimmenLifeLoss(state, seat) {
   if (state.lives[seat] > 0) {
     state.lives[seat] -= 1;
@@ -262,6 +276,7 @@ function applySchwimmenLifeLoss(state, seat) {
   return { eliminatedNow: true };
 }
 
+// Spezialregel "Feuer" (drei Asse) für Schwimmen.
 function handleSchwimmenFeuer(state, seat) {
   if (state.finished || state.fireResolved) return false;
   const hand = state.hands?.[seat];
@@ -314,6 +329,7 @@ function handleSchwimmenFeuer(state, seat) {
   return true;
 }
 
+// Beendet eine Schwimmen-Runde und verarbeitet Leben/Eliminierung.
 function finishSchwimmenRound(state) {
   const activeSeats = getActiveSchwimmenSeats(state);
   if (activeSeats.length <= 1) {
@@ -388,6 +404,7 @@ function finishSchwimmenRound(state) {
   state.currentPlayer = startSeat;
 }
 
+// Beendet einen Zug in Schwimmen (inkl. Klopfen-Logik).
 function endSchwimmenTurn(state, { knocked } = { knocked: false }) {
   if (state.finished) return;
   const currentSeat = state.currentPlayer;
@@ -405,16 +422,23 @@ function endSchwimmenTurn(state, { knocked } = { knocked: false }) {
   state.currentPlayer = getNextActiveSchwimmenSeat(state, currentSeat);
 }
 
-function resetTurn(state) {
+// Gemeinsamer Helfer für Würfelspiele: Würfel/Weitermachen zurücksetzen.
+function resetDiceState(state, diceCount) {
   state.throwCount = 0;
-  state.dice = [null, null, null];
-  state.held = [false, false, false];
+  state.dice = Array(diceCount).fill(null);
+  state.held = Array(diceCount).fill(false);
+}
+
+// Setzt den Schocken-Zugzustand zurück.
+function resetTurn(state) {
+  resetDiceState(state, 3);
   state.convertible = [false, false, false];
   state.convertedThisTurn = false;
   state.convertedCount = 0;
   state.maxConvertibleThisTurn = 0;
 }
 
+// 6-zu-1-Regel im Schocken manuell anwenden.
 function applyManualSixRule(state) {
   state.convertible = [false, false, false];
   const freshSixes = [];
@@ -429,12 +453,12 @@ function applyManualSixRule(state) {
   for (const i of freshSixes) state.convertible[i] = true;
 }
 
+// Setzt den Kniffel-Zugzustand zurück.
 function resetKniffelTurn(state) {
-  state.throwCount = 0;
-  state.dice = [null, null, null, null, null];
-  state.held = [false, false, false, false, false];
+  resetDiceState(state, 5);
 }
 
+// Bewertet einen Kniffel-Wurf für eine Kategorie.
 function scoreKniffel(dice, category) {
   const counts = [0, 0, 0, 0, 0, 0];
   dice.forEach(d => { counts[d - 1]++; });
@@ -464,6 +488,7 @@ function scoreKniffel(dice, category) {
   }
 }
 
+// Bewertet einen Schocken-Wurf (Rangfolge, Wurfanzahl etc.).
 function rateRoll(dice, throws, playerIndex) {
   const sorted = dice.slice().sort((x, y) => y - x);
   const [a, b, c] = sorted;
