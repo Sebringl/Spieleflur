@@ -311,6 +311,10 @@
     function getPlayerName() {
       return document.getElementById("playerName").value.trim();
     }
+    function storePlayerName(name) {
+      myName = name;
+      localStorage.setItem("schocken_name", name);
+    }
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, m => ({
         "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
@@ -1166,6 +1170,7 @@
       const gameType = getSelectedGameType();
       if (!name) return showLobbyError("Bitte Name eingeben.");
       if (!canEnterRoom(code)) return;
+      storePlayerName(name);
       showLobbyError("");
       if (code) {
         showJoinStatus(`Beitritt für ${code} angefragt…`);
@@ -1293,6 +1298,10 @@
     document.getElementById("btnNewCode").onclick = () => {
       setSuggestedCode();
     };
+
+    document.getElementById("playerName").addEventListener("input", (event) => {
+      storePlayerName(event.target.value.trim());
+    });
 
     document.getElementById("deckelToggle").onchange = (event) => {
       if (!room || !myToken) return;
