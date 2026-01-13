@@ -139,7 +139,7 @@ function createKniffelState() {
 // Fisher-Yates zum Mischen eines Kartenstapels (Schwimmen).
 function shuffleDeck(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = crypto.randomInt(0, i + 1);
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
@@ -156,6 +156,21 @@ function createSchwimmenDeck() {
     }
   }
   return shuffleDeck(deck);
+}
+
+function hasDuplicateSchwimmenCards(collections) {
+  const seen = new Set();
+  let total = 0;
+  for (const cards of collections) {
+    for (const card of cards) {
+      if (!card) continue;
+      total += 1;
+      const key = `${card.rank}${card.suit}`;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+  }
+  return total !== 32;
 }
 
 // Kartenwert für Schwimmen (A=11, Bildkarten=10).
@@ -224,13 +239,23 @@ function getNextActiveSchwimmenSeat(state, fromSeat) {
 
 // Richtet eine neue Schwimmen-Runde ein.
 function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) {
-  const deck = createSchwimmenDeck();
+  let deck = [];
+  let hands = [];
+  let tableCards = [];
+  let attempts = 0;
+  do {
+    deck = createSchwimmenDeck();
+    hands = state.players.map((_, seat) => {
+      if (state.eliminated?.[seat]) return [];
+      return deck.splice(0, 3);
+    });
+    tableCards = deck.splice(0, 3);
+    attempts += 1;
+  } while (hasDuplicateSchwimmenCards([deck, ...hands, tableCards]) && attempts < 5);
+
   state.deck = deck;
-  state.hands = state.players.map((_, seat) => {
-    if (state.eliminated?.[seat]) return [];
-    return deck.splice(0, 3);
-  });
-  state.tableCards = deck.splice(0, 3);
+  state.hands = hands;
+  state.tableCards = tableCards;
   state.passCount = 0;
   state.knockedBy = null;
   state.lastTurnsRemaining = null;
@@ -238,6 +263,7 @@ function setupSchwimmenRound(state, { startingSeat, resetScores = false } = {}) 
   state.fireResolved = false;
   state.roundPending = false;
   state.nextStartingSeat = null;
+  state.message = "";
   if (resetScores) {
     state.scores = [];
   }
@@ -1344,7 +1370,9 @@ io.on("connection", (socket) => {
 
     const seatIndex = room.players.findIndex(p => p.socketId === socket.id);
     if (seatIndex < 0) return;
-    if (typeof state.nextStartingSeat === "number" && seatIndex !== state.nextStartingSeat) {
+    const player = room.players[seatIndex];
+    const isHost = player?.token === room.hostToken;
+    if (typeof state.nextStartingSeat === "number" && seatIndex !== state.nextStartingSeat && !isHost) {
       return socket.emit("error_msg", { message: "Nur der Verlierer darf die nächste Runde starten." });
     }
 

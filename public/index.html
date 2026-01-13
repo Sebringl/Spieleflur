@@ -819,7 +819,7 @@
       document.body.style.backgroundColor = playerBgColors[colorIdx];
 
       const myTurn = isMyTurn();
-      if (!myTurn || state.finished) {
+      if (!myTurn || state.finished || state.roundPending) {
         selectedHandIndex = null;
         selectedTableIndex = null;
       }
@@ -868,7 +868,7 @@
       if (knockBtn) knockBtn.disabled = !canActNow || state.knockedBy !== null;
       if (nextRoundBtn) {
         const showNextRound = !!state.roundPending && !state.finished;
-        const canStartNext = showNextRound && mySeat === state.nextStartingSeat;
+        const canStartNext = showNextRound && (mySeat === state.nextStartingSeat || isHost);
         nextRoundBtn.style.display = showNextRound ? "inline-block" : "none";
         nextRoundBtn.disabled = !canStartNext;
       }
@@ -1252,6 +1252,8 @@
 
     document.getElementById("schwimmenNextRoundBtn").onclick = () => {
       if (!room || !isSchwimmenGame()) return;
+      selectedHandIndex = null;
+      selectedTableIndex = null;
       socket.emit("schwimmen_start_round", { code: room.code });
     };
 
