@@ -74,7 +74,7 @@
 </head>
 <body>
   <h1 id="pageTitle" class="page-title">
-    <img class="page-title-logo" src="/header.png" alt="Spieleflur" />
+    <img id="pageTitleLogo" class="page-title-logo" src="/header_Lobby.png" alt="Spieleflur Lobby" />
     <span id="pageTitleText" class="visually-hidden">Spieleflur (Lobby)</span>
   </h1>
 
@@ -255,15 +255,29 @@
     let selectedHandIndex = null;
     let selectedTableIndex = null;
 
+    const headerImages = {
+      lobby: "/header_Lobby.png",
+      schocken: "/header_schocken.png",
+      schwimmen: "/header_schwimmen.png",
+      kniffel: "/header_yahtzee.png"
+    };
+
+    function updateHeader(view) {
+      const logo = document.getElementById("pageTitleLogo");
+      const titleText = document.getElementById("pageTitleText");
+      if (!logo || !titleText) return;
+      const typeKey = view === "lobby" ? getSelectedGameType() : (room?.settings?.gameType || "schocken");
+      const gameTitle = gameTypeLabels[typeKey] || "Schocken";
+      const headerSrc = view === "lobby" ? headerImages.lobby : (headerImages[typeKey] || headerImages.schocken);
+      logo.src = headerSrc;
+      logo.alt = view === "lobby" ? "Spieleflur Lobby" : `${gameTitle} Header`;
+      titleText.textContent = (view === "game" && room && room.code) ? `${gameTitle} (${room.code})` : `${gameTitle} (Lobby)`;
+    }
+
     function setView(view) {
       document.getElementById("lobby").style.display = (view === "lobby") ? "block" : "none";
       document.getElementById("game").style.display  = (view === "game") ? "block" : "none";
-      const titleText = document.getElementById("pageTitleText");
-      if (titleText) {
-        const typeKey = room?.settings?.gameType || "schocken";
-        const gameTitle = gameTypeLabels[typeKey] || "Schocken";
-        titleText.textContent = (view === "game" && room && room.code) ? `${gameTitle} (${room.code})` : `${gameTitle} (Lobby)`;
-      }
+      updateHeader(view);
     }
     function showLobbyError(msg) {
       document.getElementById("lobbyError").textContent = msg || "";
@@ -1319,6 +1333,7 @@
 
     document.getElementById("gameTypeSelect").onchange = (event) => {
       updateDeckelToggleState();
+      updateHeader("lobby");
       if (!room || !myToken) return;
       if (!isHost || room.status !== "lobby") {
         event.target.value = room?.settings?.gameType || "schocken";
@@ -1335,6 +1350,7 @@
     window.onload = () => {
       setSuggestedCode();
       document.getElementById("gameTypeSelect").value = "schocken";
+      updateHeader("lobby");
       if (myName) {
         document.getElementById("playerName").value = myName;
       }
