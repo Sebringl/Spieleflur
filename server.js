@@ -61,6 +61,7 @@ function normalizeRoomGameType(value) {
   const candidate = String(value || "").trim().toLowerCase();
   if (candidate === "kniffel") return "kniffel";
   if (candidate === "schwimmen") return "schwimmen";
+  if (candidate === "skat") return "skat";
   return "schocken";
 }
 
@@ -218,6 +219,15 @@ function createSchwimmenState(players) {
   };
   setupSchwimmenRound(state, { resetScores: true });
   return state;
+}
+
+function createSkatState(players) {
+  return {
+    gameType: "skat",
+    players,
+    currentPlayer: 0,
+    message: "Skat ist startklar. Spiel-Logik folgt."
+  };
 }
 
 // Aktive (nicht eliminierte) Sitzplätze in Schwimmen.
@@ -684,6 +694,8 @@ function startNewGame(room) {
     room.state = state;
   } else if (room.settings.gameType === "schwimmen") {
     room.state = createSchwimmenState(room.players.map(p => p.name));
+  } else if (room.settings.gameType === "skat") {
+    room.state = createSkatState(room.players.map(p => p.name));
   } else {
     const state = createInitialState({ useDeckel: room.settings.useDeckel });
     state.players = room.players.map(p => p.name);
@@ -1188,6 +1200,9 @@ io.on("connection", (socket) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
     if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann starten." });
+    if (room.settings.gameType === "skat" && room.players.length !== 3) {
+      return socket.emit("error_msg", { message: "Skat benötigt genau 3 Spieler." });
+    }
     if (room.players.length < 2) return socket.emit("error_msg", { message: "Mindestens 2 Spieler nötig." });
 
     startNewGame(room);
@@ -1461,6 +1476,9 @@ io.on("connection", (socket) => {
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
     }
+    if (state.gameType === "skat") {
+      return socket.emit("error_msg", { message: "Skat unterstützt diese Aktion noch nicht." });
+    }
 
     if (state.throwCount >= state.maxThrowsThisRound) {
       return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
@@ -1500,6 +1518,9 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
+    }
+    if (state.gameType === "skat") {
+      return socket.emit("error_msg", { message: "Skat unterstützt diese Aktion noch nicht." });
     }
 
     if (![0, 1, 2].includes(i)) return;
@@ -1583,6 +1604,9 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "schwimmen") {
       return socket.emit("error_msg", { message: "Diese Aktion ist in Schwimmen nicht verfügbar." });
+    }
+    if (state.gameType === "skat") {
+      return socket.emit("error_msg", { message: "Skat unterstützt diese Aktion noch nicht." });
     }
 
     if (state.throwCount === 0 || state.dice.includes(null)) {
