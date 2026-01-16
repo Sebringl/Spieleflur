@@ -62,6 +62,7 @@ function normalizeRoomGameType(value) {
   if (candidate === "kniffel") return "kniffel";
   if (candidate === "schwimmen") return "schwimmen";
   if (candidate === "skat") return "skat";
+  if (candidate === "cabo") return "cabo";
   return "schocken";
 }
 
@@ -134,6 +135,19 @@ function createKniffelState() {
     totals: [],
     message: "",
     finished: false
+  };
+}
+
+function createCaboState(players) {
+  return {
+    gameType: "cabo",
+    players,
+    currentPlayer: 0,
+    roundNumber: 1,
+    scores: players.map(() => 0),
+    roundScores: players.map(() => null),
+    history: [],
+    message: ""
   };
 }
 
@@ -738,6 +752,8 @@ function startNewGame(room) {
     state.totals = state.players.map(_ => 0);
     state.currentPlayer = 0;
     room.state = state;
+  } else if (room.settings.gameType === "cabo") {
+    room.state = createCaboState(room.players.map(p => p.name));
   } else if (room.settings.gameType === "schwimmen") {
     room.state = createSchwimmenState(room.players.map(p => p.name));
   } else if (room.settings.gameType === "skat") {
@@ -1506,6 +1522,35 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  socket.on("cabo_end_turn", ({ code, score }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const state = room.state;
+    if (!state || state.gameType !== "cabo") return;
+
+    const scoreValue = Number(score);
+    if (!Number.isFinite(scoreValue)) {
+      return socket.emit("error_msg", { message: "Ungültige Punkte." });
+    }
+
+    state.roundScores[state.currentPlayer] = scoreValue;
+    state.scores[state.currentPlayer] = (state.scores[state.currentPlayer] || 0) + scoreValue;
+
+    state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
+    if (state.currentPlayer === 0) {
+      state.history.push([...state.roundScores]);
+      state.roundScores = state.players.map(() => null);
+      state.roundNumber = (state.roundNumber || 1) + 1;
+    }
+    state.message = "";
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
   socket.on("leave_room", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -1589,6 +1634,9 @@ io.on("connection", (socket) => {
     if (state.gameType === "skat") {
       return socket.emit("error_msg", { message: "Skat nutzt eigene Aktionen." });
     }
+    if (state.gameType === "cabo") {
+      return socket.emit("error_msg", { message: "Kaboh nutzt eigene Aktionen." });
+    }
 
     if (state.throwCount >= state.maxThrowsThisRound) {
       return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
@@ -1631,6 +1679,9 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "skat") {
       return socket.emit("error_msg", { message: "Skat nutzt eigene Aktionen." });
+    }
+    if (state.gameType === "cabo") {
+      return socket.emit("error_msg", { message: "Kaboh nutzt eigene Aktionen." });
     }
 
     if (![0, 1, 2].includes(i)) return;
@@ -1717,6 +1768,9 @@ io.on("connection", (socket) => {
     }
     if (state.gameType === "skat") {
       return socket.emit("error_msg", { message: "Skat nutzt eigene Aktionen." });
+    }
+    if (state.gameType === "cabo") {
+      return socket.emit("error_msg", { message: "Kaboh nutzt eigene Aktionen." });
     }
 
     if (state.throwCount === 0 || state.dice.includes(null)) {
