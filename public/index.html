@@ -86,6 +86,7 @@
           <option value="schocken">Schocken</option>
           <option value="kniffel">Yahtzee</option>
           <option value="schwimmen">Schwimmen</option>
+          <option value="skat">Skat</option>
         </select>
         <label class="deckel-inline" for="deckelToggle">
           <input type="checkbox" id="deckelToggle" />
@@ -202,6 +203,12 @@
       <div id="schwimmenScores" style="margin-top: 14px;"></div>
     </div>
 
+    <div id="skatView" style="display:none;">
+      <div class="small muted">Skat (3 Spieler)</div>
+      <div id="skatPlayers" class="playerList"></div>
+      <div id="skatResult" style="margin-top: 10px;"></div>
+    </div>
+
     <div id="historyTable" style="margin-top: 14px;"></div>
 
     <div id="backToLobbyWrap" style="margin-top: 14px;">
@@ -239,7 +246,14 @@
     const gameTypeLabels = {
       schocken: "Schocken",
       kniffel: "Yahtzee",
-      schwimmen: "Schwimmen"
+      schwimmen: "Schwimmen",
+      skat: "Skat"
+    };
+    const gameTypeRequirements = {
+      schocken: { min: 2 },
+      kniffel: { min: 2 },
+      schwimmen: { min: 2 },
+      skat: { exact: 3 }
     };
 
     let myToken    = localStorage.getItem("schocken_token") || null;
@@ -259,7 +273,8 @@
       lobby: "/header_Lobby.png",
       schocken: "/header_schocken.png",
       schwimmen: "/header_schwimmen.png",
-      kniffel: "/header_yahtzee.png"
+      kniffel: "/header_yahtzee.png",
+      skat: "/header_Lobby.png"
     };
 
     function updateHeader(view) {
@@ -341,6 +356,9 @@
       const select = document.getElementById("gameTypeSelect");
       return select ? select.value : "schocken";
     }
+    function getGameTypeRequirement(value) {
+      return gameTypeRequirements[value] || { min: 2 };
+    }
 
     function isMyTurn() {
       return state && mySeat >= 0 && state.currentPlayer === mySeat;
@@ -354,9 +372,14 @@
       return room && room.settings && room.settings.gameType === "schwimmen";
     }
 
+    function isSkatGame() {
+      return room && room.settings && room.settings.gameType === "skat";
+    }
+
     function getGameResultElement() {
       if (isKniffelGame()) return document.getElementById("kniffelResult");
       if (isSchwimmenGame()) return document.getElementById("schwimmenResult");
+      if (isSkatGame()) return document.getElementById("skatResult");
       return document.getElementById("result");
     }
 
@@ -466,6 +489,7 @@
       updateDeckelToggleState();
       updateGameTypeSelectState();
       updateLobbyVisibility();
+      updateStartButtonState();
       const settingsSummary = document.getElementById("roomSettingsSummary");
       if (settingsSummary && room?.settings) {
         const typeLabel = getGameTypeLabel(room.settings.gameType);
@@ -726,6 +750,7 @@
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("kniffelView").style.display = "block";
       document.getElementById("schwimmenView").style.display = "none";
+      document.getElementById("skatView").style.display = "none";
       document.getElementById("historyTable").style.display = "none";
       document.getElementById("historyTable").innerHTML = "";
 
@@ -828,6 +853,7 @@
       document.getElementById("kniffelView").style.display = "none";
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("schwimmenView").style.display = "block";
+      document.getElementById("skatView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -916,11 +942,40 @@
       updateHistoryTable();
     }
 
+    function renderSkatGame() {
+      if (!state) return;
+      document.getElementById("kniffelView").style.display = "none";
+      document.getElementById("schockenView").style.display = "none";
+      document.getElementById("schwimmenView").style.display = "none";
+      document.getElementById("skatView").style.display = "block";
+      document.getElementById("historyTable").style.display = "none";
+      document.getElementById("historyTable").innerHTML = "";
+
+      const playerCount = state.players?.length || 0;
+      document.getElementById("playerDisplay").textContent = `Skat · ${playerCount} Spieler`;
+      document.getElementById("playerDisplay").style.color = "";
+      document.body.style.backgroundColor = "";
+
+      document.getElementById("turnHint").textContent =
+        "Skat ist vorbereitet. Die Spiel-Logik folgt.";
+      document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
+      updateDeckelToggleState();
+      updateLobbyVisibility();
+
+      const players = state.players || [];
+      const playerList = players.length
+        ? `<h4>Spieler</h4><ul>${players.map(name => `<li>${escapeHtml(name)}</li>`).join("")}</ul>`
+        : "";
+      document.getElementById("skatPlayers").innerHTML = playerList;
+      document.getElementById("skatResult").textContent = state.message || "";
+    }
+
     function renderSchockenGame() {
       if (!state) return;
       document.getElementById("kniffelView").style.display = "none";
       document.getElementById("schockenView").style.display = "block";
       document.getElementById("schwimmenView").style.display = "none";
+      document.getElementById("skatView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
@@ -976,6 +1031,8 @@
         renderKniffelGame();
       } else if (isSchwimmenGame()) {
         renderSchwimmenGame();
+      } else if (isSkatGame()) {
+        renderSkatGame();
       } else {
         renderSchockenGame();
       }
@@ -1334,6 +1391,7 @@
     document.getElementById("gameTypeSelect").onchange = (event) => {
       updateDeckelToggleState();
       updateHeader("lobby");
+      updateStartButtonState();
       if (!room || !myToken) return;
       if (!isHost || room.status !== "lobby") {
         event.target.value = room?.settings?.gameType || "schocken";
@@ -1415,6 +1473,51 @@
         ? (!isHost || room.status !== "lobby" || !isSchocken)
         : !isSchocken;
       toggle.parentElement.style.display = isSchocken ? "flex" : "none";
+    }
+
+    function getGameStartStatus() {
+      const selectedType = room?.settings?.gameType
+        || document.getElementById("gameTypeSelect")?.value
+        || "schocken";
+      const requirement = getGameTypeRequirement(selectedType);
+      const playerCount = room?.players?.length || 0;
+      if (requirement.exact && playerCount !== requirement.exact) {
+        return {
+          ok: false,
+          reason: `${getGameTypeLabel(selectedType)} benötigt genau ${requirement.exact} Spieler (aktuell ${playerCount}).`
+        };
+      }
+      if (requirement.min && playerCount < requirement.min) {
+        return {
+          ok: false,
+          reason: `${getGameTypeLabel(selectedType)} benötigt mindestens ${requirement.min} Spieler (aktuell ${playerCount}).`
+        };
+      }
+      if (requirement.max && playerCount > requirement.max) {
+        return {
+          ok: false,
+          reason: `${getGameTypeLabel(selectedType)} erlaubt höchstens ${requirement.max} Spieler (aktuell ${playerCount}).`
+        };
+      }
+      return { ok: true, reason: "" };
+    }
+
+    function updateStartButtonState() {
+      const startButton = document.getElementById("btnStartGame");
+      const hint = document.getElementById("hostStartHint");
+      if (!startButton || !hint) return;
+      if (!room || room.status !== "lobby") {
+        startButton.disabled = true;
+        hint.textContent = isHost ? "Nur du kannst das Spiel starten." : "Nur der Host kann das Spiel starten.";
+        return;
+      }
+      const status = getGameStartStatus();
+      startButton.disabled = !isHost || !status.ok;
+      if (!status.ok) {
+        hint.textContent = status.reason;
+      } else {
+        hint.textContent = isHost ? "Nur du kannst das Spiel starten." : "Nur der Host kann das Spiel starten.";
+      }
     }
 
     function updateGameTypeSelectState() {
