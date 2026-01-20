@@ -22,6 +22,7 @@
     .die {
       font-size: clamp(56px, 12vw, 140px);
       line-height: 1;
+      font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
       cursor: pointer;
       padding: 10px;
       border: 2px solid transparent;
@@ -175,12 +176,12 @@
     }
 
     @media (max-width: 600px) {
-      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: clamp(48px, 12vw, 90px); padding: 6px; }
-      .kwyx-row { padding: 4px 4px; gap: 4px; }
+      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: 1; padding: 6px; }
+      .kwyx-row { flex-direction: column; align-items: stretch; padding: 4px; gap: 4px; }
       .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
       .kwyx-row.penalty { flex-direction: row; align-items: center; }
       .kwyx-row.penalty .kwyx-row-label { margin-bottom: 0; }
-      .kwyx-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; overflow-x: visible; }
+      .kwyx-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; overflow-x: visible; width: 100%; max-width: 100%; }
       .kwyx-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; font-size: clamp(8px, 2.4vw, 10px); border-radius: 5px; }
       .kwyx-cell.lock { font-size: 10px; }
       .kwyx-card { margin: 8px 0; }
