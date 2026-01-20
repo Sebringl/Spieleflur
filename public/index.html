@@ -110,6 +110,10 @@
     .kwyx-row.yellow { background: #fff9c4; }
     .kwyx-row.green { background: #e8f5e9; }
     .kwyx-row.blue { background: #e3f2fd; }
+    .kwyx-row.highlight-red { box-shadow: inset 0 0 0 2px #c62828; }
+    .kwyx-row.highlight-yellow { box-shadow: inset 0 0 0 2px #f57f17; }
+    .kwyx-row.highlight-green { box-shadow: inset 0 0 0 2px #2e7d32; }
+    .kwyx-row.highlight-blue { box-shadow: inset 0 0 0 2px #1565c0; }
     .kwyx-row.red .kwyx-cell { color: #c62828; }
     .kwyx-row.yellow .kwyx-cell { color: #f57f17; }
     .kwyx-row.green .kwyx-cell { color: #2e7d32; }
@@ -422,6 +426,11 @@
       green: Array.from({ length: 11 }, (_, i) => 12 - i),
       blue: Array.from({ length: 11 }, (_, i) => 12 - i)
     };
+
+    function getKwyxHighlightColor() {
+      if (!state || typeof state.currentPlayer !== "number") return null;
+      return kwyxRows[state.currentPlayer % kwyxRows.length];
+    }
     // Name für jede Spielart (UI-Text).
     const gameTypeLabels = {
       schocken: "Schocken",
@@ -464,8 +473,8 @@
       schocken: "/header_schocken.png",
       schwimmen: "/header_schwimmen.png",
       kniffel: "/header_yahtzee.png",
-      kwyx: "/header_Lobby.png",
-      skat: "/header_Lobby.png"
+      kwyx: "/header_kwyx.png",
+      skat: "/header_Skat.png"
     };
 
     // Wechselt Logo und Titel je nach Spielansicht.
@@ -1117,6 +1126,7 @@
       if (!container || !state) return;
 
       const card = state.scorecards?.[mySeat];
+      const highlightColor = getKwyxHighlightColor();
       const { whiteSum, colorSums } = getKwyxDiceSums();
       const allowSelect = allowWhiteSelect || allowColorSelect;
 
@@ -1124,6 +1134,9 @@
       kwyxRows.forEach(color => {
         const row = document.createElement("div");
         row.className = `kwyx-row ${color}`;
+        if (highlightColor === color) {
+          row.classList.add(`highlight-${color}`);
+        }
         const cells = document.createElement("div");
         cells.className = "kwyx-cells";
         const numbers = kwyxNumbers[color];
