@@ -103,7 +103,10 @@
     .kwyx-cell.marked { background: #c8e6c9; border-color: #2e7d32; }
     .kwyx-cell.locked { background: #ffe0b2; border-color: #ef6c00; }
     .kwyx-cell.selected-white { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #9e9e9e; }
-    .kwyx-cell.selected-color { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #1976d2; }
+    .kwyx-cell.selected-color-red { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #c62828; }
+    .kwyx-cell.selected-color-yellow { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #f57f17; }
+    .kwyx-cell.selected-color-green { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #2e7d32; }
+    .kwyx-cell.selected-color-blue { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #1565c0; }
     .kwyx-cell.selected-penalty { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #616161; }
     .kwyx-cell.selectable-white { border-color: #9e9e9e; }
     .kwyx-cell.selectable-color { border-color: #1976d2; }
@@ -111,6 +114,16 @@
     .kwyx-points table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
     .kwyx-points th, .kwyx-points td { border: 1px solid #ddd; padding: 4px 6px; text-align: center; }
     .kwyx-points th { background: #f1f1f1; }
+    .kwyx-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 12px; }
+    .kwyx-actions .kwyx-action-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    @media (max-width: 600px) {
+      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: clamp(48px, 12vw, 90px); padding: 6px; }
+      .kwyx-row { padding: 6px 8px; gap: 6px; }
+      .kwyx-row-label { width: 54px; font-size: 14px; }
+      .kwyx-cell { width: 28px; height: 28px; font-size: 12px; }
+      .kwyx-card { margin: 8px 0; }
+    }
   </style>
 </head>
 <body>
@@ -236,15 +249,18 @@
         <div class="die kwyx-die blue" id="kwyxDieBlue">□</div>
       </div>
 
-      <button id="kwyxRollBtn">Würfeln</button>
-      <button id="kwyxEndTurnBtn">Zug beenden</button>
-
-      <div id="kwyxThrowCount">Wurf: 0</div>
-      <div class="small" id="kwyxTurnHint"></div>
-
       <div class="kwyx-card">
         <div class="kwyx-card-title">Deine Punktekarte</div>
         <div id="kwyxCardRows"></div>
+      </div>
+
+      <div class="kwyx-actions">
+        <div class="kwyx-action-buttons">
+          <button id="kwyxRollBtn">Würfeln</button>
+          <button id="kwyxEndTurnBtn">Zug beenden</button>
+        </div>
+        <div id="kwyxThrowCount">Wurf: 0</div>
+        <div class="small" id="kwyxTurnHint"></div>
       </div>
 
       <div class="small muted">Ohne Markierung gibt es einen Fehlwurf (-5 Punkte).</div>
@@ -386,6 +402,7 @@
     let kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: false };
     let lastKwyxThrowCount = null;
     let lastKwyxPlayer = null;
+    let kwyxCountdownTimer = null;
 
     const headerImages = {
       lobby: "/header_Lobby.png",
@@ -520,7 +537,7 @@
         }
       }
 
-      const title = "Du bist am Zug";
+      const title = "Spieleflur";
       const body = playerName ? `Am Zug: ${playerName}` : "Jetzt bist du dran!";
 
       if ("serviceWorker" in navigator) {
@@ -908,8 +925,7 @@
       renderKniffelCategorySelect(myTurn);
       updateKniffelEndButton();
 
-      document.getElementById("turnHint").textContent =
-        myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
@@ -957,20 +973,64 @@
       return;
     }
 
+    function getKwyxCountdownSeconds() {
+      if (!state || !state.kwyxCountdownEndsAt) return null;
+      const remainingMs = state.kwyxCountdownEndsAt - Date.now();
+      if (remainingMs <= 0) return 0;
+      return Math.ceil(remainingMs / 1000);
+    }
+
     function updateKwyxEndButton() {
       const endBtn = document.getElementById("kwyxEndTurnBtn");
       if (!endBtn || !state) return;
-      const hasSelection = kwyxSelections.penalty || kwyxSelections.whiteRow || kwyxSelections.colorRow;
-      const canEnd = isMyTurn() && !state.finished && (state.throwCount > 0 || hasSelection);
+      const myEnded = !!state.kwyxEnded?.[mySeat];
+      const canEnd = mySeat >= 0
+        && !state.finished
+        && state.throwCount > 0
+        && !myEnded;
       endBtn.disabled = !canEnd;
+
+      const countdown = getKwyxCountdownSeconds();
+      const baseLabel = myEnded ? "Zug beendet" : "Zug beenden";
+      endBtn.textContent = countdown !== null ? `${baseLabel} (${countdown}s)` : baseLabel;
     }
 
-    function renderKwyxCardRows({ allowSelect }) {
+    function stopKwyxCountdownTimer() {
+      if (kwyxCountdownTimer) {
+        clearInterval(kwyxCountdownTimer);
+        kwyxCountdownTimer = null;
+      }
+    }
+
+    function updateKwyxCountdownTimer() {
+      const countdown = getKwyxCountdownSeconds();
+      if (countdown === null || !isKwyxGame()) {
+        stopKwyxCountdownTimer();
+        updateKwyxEndButton();
+        return;
+      }
+      updateKwyxEndButton();
+      if (!kwyxCountdownTimer) {
+        kwyxCountdownTimer = setInterval(() => {
+          if (!isKwyxGame() || !state) {
+            stopKwyxCountdownTimer();
+            return;
+          }
+          if (getKwyxCountdownSeconds() === null) {
+            stopKwyxCountdownTimer();
+          }
+          updateKwyxEndButton();
+        }, 250);
+      }
+    }
+
+    function renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty }) {
       const container = document.getElementById("kwyxCardRows");
       if (!container || !state) return;
 
       const card = state.scorecards?.[mySeat];
       const { whiteSum, colorSums } = getKwyxDiceSums();
+      const allowSelect = allowWhiteSelect || allowColorSelect;
 
       container.innerHTML = "";
       kwyxRows.forEach(color => {
@@ -995,8 +1055,8 @@
           if (marked) btn.classList.add("marked");
           const locked = !!state.rowLocks?.[color];
 
-          const canSelectWhite = allowSelect && Number.isFinite(whiteSum) && value === whiteSum;
-          const canSelectColor = allowSelect && colorSums[color]?.includes(value);
+          const canSelectWhite = allowWhiteSelect && Number.isFinite(whiteSum) && value === whiteSum;
+          const canSelectColor = allowColorSelect && colorSums[color]?.includes(value);
           if (!allowSelect || marked || locked || (!canSelectWhite && !canSelectColor)) {
             if (locked) btn.classList.add("inactive");
           } else {
@@ -1016,7 +1076,7 @@
                 kwyxSelections.colorRow = color;
                 kwyxSelections.colorSum = String(value);
               }
-              renderKwyxCardRows({ allowSelect });
+              renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty });
               updateKwyxSelectionSummary();
               updateKwyxEndButton();
             };
@@ -1026,7 +1086,7 @@
             btn.classList.add("selected-white");
           }
           if (kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === value) {
-            btn.classList.add("selected-color");
+            btn.classList.add(`selected-color-${color}`);
           }
 
           cells.appendChild(btn);
@@ -1039,12 +1099,12 @@
         if (state.rowLocks?.[color]) {
           lockCell.classList.add("locked");
         }
-        const canSelectLockWhite = allowSelect && Number.isFinite(whiteSum) && lastValue === whiteSum;
-        const canSelectLockColor = allowSelect && colorSums[color]?.includes(lastValue);
-        if (!allowSelect || state.rowLocks?.[color] || (!canSelectLockWhite && !canSelectLockColor)) {
-          if (state.rowLocks?.[color]) lockCell.classList.add("inactive");
-        } else {
-          lockCell.onclick = () => {
+          const canSelectLockWhite = allowWhiteSelect && Number.isFinite(whiteSum) && lastValue === whiteSum;
+          const canSelectLockColor = allowColorSelect && colorSums[color]?.includes(lastValue);
+          if (!allowSelect || state.rowLocks?.[color] || (!canSelectLockWhite && !canSelectLockColor)) {
+            if (state.rowLocks?.[color]) lockCell.classList.add("inactive");
+          } else {
+            lockCell.onclick = () => {
             if (state.rowLocks?.[color]) return;
             kwyxSelections.penalty = false;
             const isWhiteSelected = kwyxSelections.whiteRow === color && whiteSum === lastValue;
@@ -1060,7 +1120,7 @@
               kwyxSelections.colorRow = color;
               kwyxSelections.colorSum = String(lastValue);
             }
-            renderKwyxCardRows({ allowSelect });
+            renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty });
             updateKwyxSelectionSummary();
             updateKwyxEndButton();
           };
@@ -1069,7 +1129,7 @@
           lockCell.classList.add("selected-white");
         }
         if (kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === lastValue) {
-          lockCell.classList.add("selected-color");
+          lockCell.classList.add(`selected-color-${color}`);
         }
         row.appendChild(cells);
         const lockWrap = document.createElement("div");
@@ -1089,7 +1149,7 @@
       const penaltyCells = document.createElement("div");
       penaltyCells.className = "kwyx-cells";
       const strikes = card?.strikes ?? 0;
-      const canSelectPenalty = allowSelect && strikes < 4;
+      const canSelectPenalty = allowPenalty && strikes < 4;
       for (let i = 0; i < 4; i++) {
         const btn = document.createElement("button");
         btn.type = "button";
@@ -1100,8 +1160,12 @@
           btn.classList.add("inactive");
         } else {
           btn.onclick = () => {
-            kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: true };
-            renderKwyxCardRows({ allowSelect });
+            if (kwyxSelections.penalty) {
+              kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: false };
+            } else {
+              kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: true };
+            }
+            renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty });
             updateKwyxSelectionSummary();
             updateKwyxEndButton();
           };
@@ -1159,8 +1223,7 @@
 
       updateKwyxEndButton();
 
-      document.getElementById("kwyxTurnHint").textContent =
-        myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("kwyxTurnHint").textContent = "";
       document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
@@ -1178,11 +1241,17 @@
         lastKwyxThrowCount = state.throwCount;
       }
 
-      const allowSelect = myTurn && state.throwCount > 0 && !state.finished;
-      renderKwyxCardRows({ allowSelect });
+      const myEnded = !!state.kwyxEnded?.[mySeat];
+      const canInteract = state.throwCount > 0 && !state.finished && mySeat >= 0 && !myEnded;
+      const allowWhiteSelect = canInteract;
+      const allowColorSelect = canInteract && myTurn;
+      const allowPenalty = canInteract && myTurn;
+      renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty });
 
       const msg = state.message || "";
       document.getElementById("kwyxResult").textContent = msg;
+
+      updateKwyxCountdownTimer();
     }
 
     function formatSchwimmenCard(card) {
@@ -1329,8 +1398,7 @@
         nextRoundBtn.disabled = !canStartNext;
       }
 
-      document.getElementById("turnHint").textContent =
-        myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
@@ -1370,8 +1438,7 @@
       document.getElementById("playerDisplay").style.color = "";
       document.body.style.backgroundColor = "";
 
-      document.getElementById("turnHint").textContent =
-        isMyTurn() ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
@@ -1626,8 +1693,7 @@
       const endBtn = document.getElementById("endTurnBtn");
       endBtn.disabled = !myTurn || state.throwCount === 0 || state.dice.includes(null) || state.convertedThisTurn;
 
-      document.getElementById("turnHint").textContent =
-        myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
+      document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
@@ -1655,6 +1721,9 @@
         renderSkatGame();
       } else {
         renderSchockenGame();
+      }
+      if (!isKwyxGame()) {
+        stopKwyxCountdownTimer();
       }
     }
 
@@ -1934,21 +2003,16 @@
     document.getElementById("kwyxEndTurnBtn").onclick = () => {
       if (!room) return;
       if (!isKwyxGame()) return;
-      if (kwyxSelections.penalty) {
-        socket.emit("action_end_turn", {
-          code: room.code,
-          category: { whiteRow: "", colorRow: "", colorSum: null }
-        });
-        return;
-      }
       socket.emit("action_end_turn", {
         code: room.code,
         category: {
           whiteRow: kwyxSelections.whiteRow,
           colorRow: kwyxSelections.colorRow,
-          colorSum: kwyxSelections.colorSum ? Number(kwyxSelections.colorSum) : null
+          colorSum: kwyxSelections.colorSum ? Number(kwyxSelections.colorSum) : null,
+          penalty: kwyxSelections.penalty
         }
       });
+      resetKwyxSelections();
     };
 
     document.getElementById("kniffelCategorySelect").onchange = () => {

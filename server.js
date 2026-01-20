@@ -540,6 +540,9 @@ function createKwyxState(players) {
     },
     totals: players.map(() => 0),
     finished: false,
+    kwyxEnded: players.map(() => false),
+    kwyxCountdownEndsAt: null,
+    kwyxPendingFinish: false,
     message: ""
   };
 }
@@ -595,6 +598,67 @@ function scoreKwyxCard(card) {
 
 function updateKwyxTotals(state) {
   state.totals = state.scorecards.map(card => scoreKwyxCard(card));
+}
+
+function getSeatIndexBySocket(room, socketId) {
+  return room.players.findIndex(player => player.socketId === socketId);
+}
+
+function ensureKwyxTurnState(state) {
+  if (!Array.isArray(state.kwyxEnded) || state.kwyxEnded.length !== state.players.length) {
+    state.kwyxEnded = state.players.map(() => false);
+  }
+  if (typeof state.kwyxCountdownEndsAt !== "number") {
+    state.kwyxCountdownEndsAt = null;
+  }
+  if (typeof state.kwyxPendingFinish !== "boolean") {
+    state.kwyxPendingFinish = false;
+  }
+}
+
+function resetKwyxTurnState(state) {
+  state.kwyxEnded = state.players.map(() => false);
+  state.kwyxCountdownEndsAt = null;
+  state.kwyxPendingFinish = false;
+}
+
+function clearKwyxCountdown(room, state) {
+  if (room.kwyxCountdownTimer) {
+    clearTimeout(room.kwyxCountdownTimer);
+    room.kwyxCountdownTimer = null;
+  }
+  state.kwyxCountdownEndsAt = null;
+}
+
+function shouldFinishKwyxGame(state) {
+  const lockedRows = KWYX_ROWS.filter(color => state.rowLocks[color]).length;
+  const strikeOut = state.scorecards.some(scorecard => scorecard.strikes >= 4);
+  return lockedRows >= 2 || strikeOut;
+}
+
+function finalizeKwyxTurn(room) {
+  const state = room.state;
+  if (!state || state.gameType !== "kwyx") return;
+  if (state.finished) return;
+
+  clearKwyxCountdown(room, state);
+
+  if (state.kwyxPendingFinish && shouldFinishKwyxGame(state)) {
+    state.finished = true;
+    const maxScore = Math.max(...state.totals);
+    const winners = state.players.filter((_, i) => state.totals[i] === maxScore);
+    state.message = `Kwyx beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+    return;
+  }
+
+  state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
+  state.throwCount = 0;
+  state.dice = [null, null, null, null, null, null];
+  resetKwyxTurnState(state);
+  io.to(room.code).emit("state_update", state);
+  persistRooms();
 }
 
 // Aktive (nicht eliminierte) Sitzplätze in Schwimmen.
@@ -2206,6 +2270,9 @@ io.on("connection", (socket) => {
       if (state.throwCount >= state.maxThrowsThisRound) {
         return socket.emit("error_msg", { message: "Du hast bereits gewürfelt." });
       }
+      ensureKwyxTurnState(state);
+      resetKwyxTurnState(state);
+      clearKwyxCountdown(room, state);
       state.dice = [rollDie(), rollDie(), rollDie(), rollDie(), rollDie(), rollDie()];
       state.throwCount = 1;
       io.to(room.code).emit("state_update", state);
@@ -2303,10 +2370,11 @@ io.on("connection", (socket) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
 
-    const check = canAct(room, socket.id);
-    if (!check.ok) return socket.emit("error_msg", { message: check.error });
-
     const state = room.state;
+    if (state.gameType !== "kwyx") {
+      const check = canAct(room, socket.id);
+      if (!check.ok) return socket.emit("error_msg", { message: check.error });
+    }
 
     if (state.gameType === "kniffel") {
       if (state.finished) {
@@ -2352,9 +2420,21 @@ io.on("connection", (socket) => {
         return socket.emit("error_msg", { message: "Bitte zuerst würfeln." });
       }
 
+      ensureKwyxTurnState(state);
+
+      const seatIndex = getSeatIndexBySocket(room, socket.id);
+      if (seatIndex < 0) {
+        return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
+      }
+      if (state.kwyxEnded[seatIndex]) {
+        return socket.emit("error_msg", { message: "Du hast deinen Zug bereits beendet." });
+      }
+
+      const isActivePlayer = seatIndex === state.currentPlayer;
       const whiteRow = String(category?.whiteRow || "").trim().toLowerCase();
       const colorRow = String(category?.colorRow || "").trim().toLowerCase();
       const colorSum = Number(category?.colorSum);
+      const wantsPenalty = !!category?.penalty;
       const whiteSum = state.dice[0] + state.dice[1];
       const colorDice = {
         red: state.dice[2],
@@ -2362,7 +2442,14 @@ io.on("connection", (socket) => {
         green: state.dice[4],
         blue: state.dice[5]
       };
-      const card = state.scorecards[state.currentPlayer];
+
+      if (!isActivePlayer) {
+        if (colorRow || Number.isFinite(colorSum) || wantsPenalty) {
+          return socket.emit("error_msg", { message: "Passive Spieler dürfen nur die weißen Würfel nutzen." });
+        }
+      }
+
+      const card = state.scorecards[seatIndex];
       if (!card) {
         return socket.emit("error_msg", { message: "Scorekarte fehlt." });
       }
@@ -2371,13 +2458,21 @@ io.on("connection", (socket) => {
       if (whiteRow && KWYX_ROWS.includes(whiteRow)) {
         marks.push({ color: whiteRow, value: whiteSum, source: "white" });
       }
-      if (colorRow && KWYX_ROWS.includes(colorRow)) {
+      if (isActivePlayer && colorRow && KWYX_ROWS.includes(colorRow)) {
         const die = colorDice[colorRow];
         const possible = [state.dice[0] + die, state.dice[1] + die];
         if (!Number.isFinite(colorSum) || !possible.includes(colorSum)) {
           return socket.emit("error_msg", { message: "Ungültige Farb-Summe." });
         }
         marks.push({ color: colorRow, value: colorSum, source: "color" });
+      }
+
+      if (whiteRow && colorRow && whiteRow === colorRow) {
+        const whiteIndex = getKwyxRowIndex(whiteRow, whiteSum);
+        const colorIndex = getKwyxRowIndex(colorRow, colorSum);
+        if (whiteIndex > colorIndex) {
+          return socket.emit("error_msg", { message: "Weiß muss vor der Farbmarkierung liegen." });
+        }
       }
 
       const unique = [];
@@ -2390,40 +2485,48 @@ io.on("connection", (socket) => {
       }
 
       const applied = [];
-      for (const mark of unique) {
-        const result = canMarkKwyxRow(state, card, mark.color, mark.value);
-        if (!result.ok) {
-          return socket.emit("error_msg", { message: result.error });
+      if (!wantsPenalty) {
+        for (const mark of unique) {
+          const result = canMarkKwyxRow(state, card, mark.color, mark.value);
+          if (!result.ok) {
+            return socket.emit("error_msg", { message: result.error });
+          }
+          card[mark.color][result.index] = true;
+          if (result.isLastField) {
+            card.locks[mark.color] = true;
+            state.rowLocks[mark.color] = true;
+          }
+          applied.push(mark);
         }
-        card[mark.color][result.index] = true;
-        if (result.isLastField) {
-          card.locks[mark.color] = true;
-          state.rowLocks[mark.color] = true;
-        }
-        applied.push(mark);
       }
 
       if (applied.length === 0) {
-        card.strikes += 1;
-        state.message = `${state.players[state.currentPlayer]} streicht einen Fehlwurf (${card.strikes}/4).`;
+        if (isActivePlayer) {
+          card.strikes += 1;
+          state.message = `${state.players[seatIndex]} streicht einen Fehlwurf (${card.strikes}/4).`;
+        } else {
+          state.message = `${state.players[seatIndex]} beendet ohne Kreuz.`;
+        }
       } else {
         const markText = applied.map(mark => `${mark.color} ${mark.value}`).join(" & ");
-        state.message = `${state.players[state.currentPlayer]} markiert ${markText}.`;
+        state.message = `${state.players[seatIndex]} markiert ${markText}.`;
       }
 
       updateKwyxTotals(state);
+      state.kwyxPendingFinish = shouldFinishKwyxGame(state);
+      state.kwyxEnded[seatIndex] = true;
 
-      const lockedRows = KWYX_ROWS.filter(color => state.rowLocks[color]).length;
-      const strikeOut = state.scorecards.some(scorecard => scorecard.strikes >= 4);
-      if (lockedRows >= 2 || strikeOut) {
-        state.finished = true;
-        const maxScore = Math.max(...state.totals);
-        const winners = state.players.filter((_, i) => state.totals[i] === maxScore);
-        state.message = `Kwyx beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
-      } else {
-        state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
-        state.throwCount = 0;
-        state.dice = [null, null, null, null, null, null];
+      const allEnded = state.kwyxEnded.every(Boolean);
+      if (allEnded) {
+        finalizeKwyxTurn(room);
+        return;
+      }
+
+      if (isActivePlayer && !state.kwyxCountdownEndsAt) {
+        const countdownMs = 10 * 1000;
+        state.kwyxCountdownEndsAt = Date.now() + countdownMs;
+        if (room.kwyxCountdownTimer) clearTimeout(room.kwyxCountdownTimer);
+        room.kwyxCountdownTimer = setTimeout(() => finalizeKwyxTurn(room), countdownMs);
       }
 
       io.to(room.code).emit("state_update", state);
