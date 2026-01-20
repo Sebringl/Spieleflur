@@ -104,15 +104,18 @@
     .kwyx-die.blue { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
     .kwyx-card { margin: 12px 0; text-align: left; }
     .kwyx-card-title { font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
-    .kwyx-row-label { width: 70px; font-weight: bold; }
+    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
+    .kwyx-row-label { width: 60px; font-weight: bold; }
     .kwyx-row.red { background: #ffe5e5; }
     .kwyx-row.yellow { background: #fff9c4; }
     .kwyx-row.green { background: #e8f5e9; }
     .kwyx-row.blue { background: #e3f2fd; }
+    .kwyx-row.red .kwyx-cell { color: #c62828; }
+    .kwyx-row.yellow .kwyx-cell { color: #f57f17; }
+    .kwyx-row.green .kwyx-cell { color: #2e7d32; }
+    .kwyx-row.blue .kwyx-cell { color: #1565c0; }
     .kwyx-row.penalty { background: #f5f5f5; }
-    .kwyx-cells { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
-    .kwyx-lock { display: flex; align-items: center; }
+    .kwyx-cells { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; flex: 1; }
     .kwyx-cell {
       width: 34px;
       height: 34px;
@@ -126,6 +129,7 @@
       align-items: center;
       justify-content: center;
     }
+    .kwyx-cell.lock { font-size: 12px; }
     .kwyx-cell.inactive { cursor: default; opacity: 0.5; }
     .kwyx-cell.marked { background: #c8e6c9; border-color: #2e7d32; }
     .kwyx-cell.locked { background: #ffe0b2; border-color: #ef6c00; }
@@ -161,10 +165,15 @@
 
     @media (max-width: 600px) {
       .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: clamp(48px, 12vw, 90px); padding: 6px; }
-      .kwyx-row { padding: 6px 8px; gap: 6px; }
-      .kwyx-row-label { width: 54px; font-size: 14px; }
-      .kwyx-cell { width: 28px; height: 28px; font-size: 12px; }
+      .kwyx-row { padding: 4px 4px; gap: 4px; }
+      .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
+      .kwyx-row.penalty { flex-direction: column; align-items: flex-start; }
+      .kwyx-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; overflow-x: visible; }
+      .kwyx-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; font-size: clamp(9px, 2.6vw, 11px); }
+      .kwyx-cell.lock { font-size: 10px; }
       .kwyx-card { margin: 8px 0; }
+      .card { font-size: 24px; }
+      .card-row { gap: 6px; }
     }
   </style>
 </head>
@@ -301,11 +310,9 @@
           <button id="kwyxRollBtn">Würfeln</button>
           <button id="kwyxEndTurnBtn">Zug beenden</button>
         </div>
-        <div id="kwyxThrowCount">Wurf: 0</div>
-        <div class="small" id="kwyxTurnHint"></div>
+      <div class="small" id="kwyxTurnHint"></div>
       </div>
 
-      <div class="small muted">Ohne Markierung gibt es einen Fehlwurf (-5 Punkte).</div>
       <div id="kwyxResult"></div>
       <div class="kwyx-points">
         <div class="small muted">Punkteübersicht pro Reihe (Schloss zählt als zusätzliches Kreuz)</div>
@@ -364,7 +371,6 @@
 
     <div id="backToLobbyWrap" style="margin-top: 14px;">
       <button id="btnBackToLobby">Zurück zur Lobby</button>
-      <div class="small">Beendet das Spiel und löscht den Fortschritt.</div>
     </div>
   </div>
 
@@ -1064,10 +1070,12 @@
       const endBtn = document.getElementById("kwyxEndTurnBtn");
       if (!endBtn || !state) return;
       const myEnded = !!state.kwyxEnded?.[mySeat];
+      const hasSelection = !!(kwyxSelections.whiteRow || kwyxSelections.colorRow || kwyxSelections.penalty);
       const canEnd = mySeat >= 0
         && !state.finished
         && state.throwCount > 0
-        && !myEnded;
+        && !myEnded
+        && hasSelection;
       endBtn.disabled = !canEnd;
 
       const countdown = getKwyxCountdownSeconds();
@@ -1116,11 +1124,6 @@
       kwyxRows.forEach(color => {
         const row = document.createElement("div");
         row.className = `kwyx-row ${color}`;
-        const label = document.createElement("div");
-        label.className = "kwyx-row-label";
-        label.textContent = kwyxRowLabels[color];
-        row.appendChild(label);
-
         const cells = document.createElement("div");
         cells.className = "kwyx-cells";
         const numbers = kwyxNumbers[color];
@@ -1174,7 +1177,7 @@
 
         const lockCell = document.createElement("button");
         lockCell.type = "button";
-        lockCell.className = "kwyx-cell";
+        lockCell.className = "kwyx-cell lock";
         lockCell.textContent = "🔒";
         if (state.rowLocks?.[color]) {
           lockCell.classList.add("locked");
@@ -1211,11 +1214,8 @@
         if (kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === lastValue) {
           lockCell.classList.add(`selected-color-${color}`);
         }
+        cells.appendChild(lockCell);
         row.appendChild(cells);
-        const lockWrap = document.createElement("div");
-        lockWrap.className = "kwyx-lock";
-        lockWrap.appendChild(lockCell);
-        row.appendChild(lockWrap);
 
         container.appendChild(row);
       });
@@ -1224,7 +1224,7 @@
       penaltyRow.className = "kwyx-row penalty";
       const penaltyLabel = document.createElement("div");
       penaltyLabel.className = "kwyx-row-label";
-      penaltyLabel.textContent = "Strafe";
+      penaltyLabel.textContent = "Strafwürfe";
       penaltyRow.appendChild(penaltyLabel);
       const penaltyCells = document.createElement("div");
       penaltyCells.className = "kwyx-cells";
@@ -1274,7 +1274,6 @@
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
-      document.getElementById("kwyxThrowCount").textContent = `Wurf: ${state.throwCount}`;
 
       const colorIdx = state.currentPlayer % playerTextColors.length;
       document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
@@ -1326,6 +1325,13 @@
       const allowWhiteSelect = canInteract;
       const allowColorSelect = canInteract && myTurn;
       const allowPenalty = canInteract && myTurn;
+      if (!allowColorSelect && (kwyxSelections.colorRow || kwyxSelections.colorSum)) {
+        kwyxSelections.colorRow = "";
+        kwyxSelections.colorSum = "";
+      }
+      if (!allowPenalty && kwyxSelections.penalty) {
+        kwyxSelections.penalty = false;
+      }
       renderKwyxCardRows({ allowWhiteSelect, allowColorSelect, allowPenalty });
 
       const msg = state.message || "";
