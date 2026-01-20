@@ -77,14 +77,15 @@
     .kwyx-die.blue { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
     .kwyx-card { margin: 12px 0; text-align: left; }
     .kwyx-card-title { font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; margin-bottom: 8px; }
+    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
     .kwyx-row-label { width: 70px; font-weight: bold; }
     .kwyx-row.red { background: #ffe5e5; }
     .kwyx-row.yellow { background: #fff9c4; }
     .kwyx-row.green { background: #e8f5e9; }
     .kwyx-row.blue { background: #e3f2fd; }
     .kwyx-row.penalty { background: #f5f5f5; }
-    .kwyx-cells { display: flex; gap: 6px; flex-wrap: wrap; }
+    .kwyx-cells { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
+    .kwyx-lock { display: flex; align-items: center; }
     .kwyx-cell {
       width: 34px;
       height: 34px;
@@ -103,6 +104,7 @@
     .kwyx-cell.locked { background: #ffe0b2; border-color: #ef6c00; }
     .kwyx-cell.selected-white { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #9e9e9e; }
     .kwyx-cell.selected-color { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #1976d2; }
+    .kwyx-cell.selected-penalty { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #616161; }
     .kwyx-cell.selectable-white { border-color: #9e9e9e; }
     .kwyx-cell.selectable-color { border-color: #1976d2; }
     .kwyx-points { margin-top: 12px; }
@@ -242,9 +244,7 @@
 
       <div class="kwyx-card">
         <div class="kwyx-card-title">Deine Punktekarte</div>
-        <div class="small muted" id="kwyxDiceSummary">Weißer Wurf: - · Farbiger Wurf: -</div>
         <div id="kwyxCardRows"></div>
-        <div class="small muted" id="kwyxSelectionSummary"></div>
       </div>
 
       <div class="small muted">Ohne Markierung gibt es einen Fehlwurf (-5 Punkte).</div>
@@ -373,7 +373,7 @@
     let state = null;
     let selectedHandIndex = null;
     let selectedTableIndex = null;
-    let kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "" };
+    let kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: false };
     let lastKwyxThrowCount = null;
     let lastKwyxPlayer = null;
 
@@ -939,36 +939,28 @@
     }
 
     function resetKwyxSelections() {
-      kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "" };
+      kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: false };
       updateKwyxSelectionSummary();
     }
 
     function updateKwyxSelectionSummary() {
-      const summary = document.getElementById("kwyxSelectionSummary");
-      if (!summary) return;
-      const whiteText = kwyxSelections.whiteRow
-        ? `${kwyxRowLabels[kwyxSelections.whiteRow]} (weiß)`
-        : "keine";
-      const colorText = kwyxSelections.colorRow
-        ? `${kwyxRowLabels[kwyxSelections.colorRow]} ${kwyxSelections.colorSum}`
-        : "keine";
-      summary.textContent = `Auswahl: Weiß = ${whiteText} · Farbe = ${colorText}`;
+      return;
+    }
+
+    function updateKwyxEndButton() {
+      const endBtn = document.getElementById("kwyxEndTurnBtn");
+      if (!endBtn || !state) return;
+      const hasSelection = kwyxSelections.penalty || kwyxSelections.whiteRow || kwyxSelections.colorRow;
+      const canEnd = isMyTurn() && !state.finished && (state.throwCount > 0 || hasSelection);
+      endBtn.disabled = !canEnd;
     }
 
     function renderKwyxCardRows({ allowSelect }) {
       const container = document.getElementById("kwyxCardRows");
-      const diceSummary = document.getElementById("kwyxDiceSummary");
-      if (!container || !diceSummary || !state) return;
+      if (!container || !state) return;
 
       const card = state.scorecards?.[mySeat];
       const { whiteSum, colorSums } = getKwyxDiceSums();
-      const whiteText = Number.isFinite(whiteSum) ? whiteSum : "-";
-      const colorSummaryParts = kwyxRows.map(color => {
-        const sums = colorSums[color];
-        if (!sums || sums.length === 0) return `${kwyxRowLabels[color]}: -`;
-        return `${kwyxRowLabels[color]}: ${sums.join(" / ")}`;
-      });
-      diceSummary.textContent = `Weißer Wurf: ${whiteText} · Farbiger Wurf: ${colorSummaryParts.join(" · ")}`;
 
       container.innerHTML = "";
       kwyxRows.forEach(color => {
@@ -995,13 +987,12 @@
 
           const canSelectWhite = allowSelect && Number.isFinite(whiteSum) && value === whiteSum;
           const canSelectColor = allowSelect && colorSums[color]?.includes(value);
-          if (canSelectWhite) btn.classList.add("selectable-white");
-          if (canSelectColor) btn.classList.add("selectable-color");
           if (!allowSelect || marked || locked || (!canSelectWhite && !canSelectColor)) {
-            btn.classList.add("inactive");
+            if (locked) btn.classList.add("inactive");
           } else {
             btn.onclick = () => {
               if (marked || locked) return;
+              kwyxSelections.penalty = false;
               const isWhiteSelected = kwyxSelections.whiteRow === color && whiteSum === value;
               const isColorSelected = kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === value;
               if (isWhiteSelected) {
@@ -1017,6 +1008,7 @@
               }
               renderKwyxCardRows({ allowSelect });
               updateKwyxSelectionSummary();
+              updateKwyxEndButton();
             };
           }
 
@@ -1039,17 +1031,12 @@
         }
         const canSelectLockWhite = allowSelect && Number.isFinite(whiteSum) && lastValue === whiteSum;
         const canSelectLockColor = allowSelect && colorSums[color]?.includes(lastValue);
-        if (canSelectLockWhite) {
-          lockCell.classList.add("selectable-white");
-        }
-        if (canSelectLockColor) {
-          lockCell.classList.add("selectable-color");
-        }
         if (!allowSelect || state.rowLocks?.[color] || (!canSelectLockWhite && !canSelectLockColor)) {
-          lockCell.classList.add("inactive");
+          if (state.rowLocks?.[color]) lockCell.classList.add("inactive");
         } else {
           lockCell.onclick = () => {
             if (state.rowLocks?.[color]) return;
+            kwyxSelections.penalty = false;
             const isWhiteSelected = kwyxSelections.whiteRow === color && whiteSum === lastValue;
             const isColorSelected = kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === lastValue;
             if (isWhiteSelected) {
@@ -1065,6 +1052,7 @@
             }
             renderKwyxCardRows({ allowSelect });
             updateKwyxSelectionSummary();
+            updateKwyxEndButton();
           };
         }
         if (kwyxSelections.whiteRow === color && whiteSum === lastValue) {
@@ -1073,8 +1061,11 @@
         if (kwyxSelections.colorRow === color && Number(kwyxSelections.colorSum) === lastValue) {
           lockCell.classList.add("selected-color");
         }
-        cells.appendChild(lockCell);
         row.appendChild(cells);
+        const lockWrap = document.createElement("div");
+        lockWrap.className = "kwyx-lock";
+        lockWrap.appendChild(lockCell);
+        row.appendChild(lockWrap);
 
         container.appendChild(row);
       });
@@ -1088,17 +1079,33 @@
       const penaltyCells = document.createElement("div");
       penaltyCells.className = "kwyx-cells";
       const strikes = card?.strikes ?? 0;
+      const canSelectPenalty = allowSelect && strikes < 4;
       for (let i = 0; i < 4; i++) {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "kwyx-cell inactive";
-        btn.textContent = i < strikes ? "X" : "";
+        btn.className = "kwyx-cell";
+        const isFilled = i < strikes;
+        btn.textContent = isFilled ? "X" : "";
+        if (!canSelectPenalty || isFilled) {
+          btn.classList.add("inactive");
+        } else {
+          btn.onclick = () => {
+            kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: true };
+            renderKwyxCardRows({ allowSelect });
+            updateKwyxSelectionSummary();
+            updateKwyxEndButton();
+          };
+        }
+        if (kwyxSelections.penalty && i === strikes) {
+          btn.classList.add("selected-penalty");
+        }
         penaltyCells.appendChild(btn);
       }
       penaltyRow.appendChild(penaltyCells);
       container.appendChild(penaltyRow);
 
       updateKwyxSelectionSummary();
+      updateKwyxEndButton();
     }
 
     function renderKwyxGame() {
@@ -1140,8 +1147,7 @@
       rollBtn.disabled = !myTurn || state.throwCount >= state.maxThrowsThisRound || state.finished;
       rollBtn.textContent = state.throwCount >= state.maxThrowsThisRound ? "Bereits gewürfelt" : "Würfeln";
 
-      const endBtn = document.getElementById("kwyxEndTurnBtn");
-      endBtn.disabled = !myTurn || state.throwCount === 0 || state.finished;
+      updateKwyxEndButton();
 
       document.getElementById("kwyxTurnHint").textContent =
         myTurn ? "Du bist am Zug!" : "Du bist gerade nicht am Zug (Zuschauer-Modus).";
@@ -1743,6 +1749,13 @@
     document.getElementById("kwyxEndTurnBtn").onclick = () => {
       if (!room) return;
       if (!isKwyxGame()) return;
+      if (kwyxSelections.penalty) {
+        socket.emit("action_end_turn", {
+          code: room.code,
+          category: { whiteRow: "", colorRow: "", colorSum: null }
+        });
+        return;
+      }
       socket.emit("action_end_turn", {
         code: room.code,
         category: {
