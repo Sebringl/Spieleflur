@@ -20,12 +20,15 @@
     .dice-container { display: flex; justify-content: center; gap: 14px; margin: 16px 0; flex-wrap: wrap; }
     .die {
       font-size: clamp(56px, 12vw, 140px);
-      line-height: clamp(56px, 12vw, 140px);
+      line-height: 1;
       cursor: pointer;
       padding: 10px;
       border: 2px solid transparent;
       border-radius: 10px;
       user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .die.inactive { color: #9a9a9a; cursor: default; }
     .held { border-color: green; background-color: #eaffea; }
@@ -105,7 +108,7 @@
     .kwyx-card { margin: 12px 0; text-align: left; }
     .kwyx-card-title { font-weight: bold; margin-bottom: 8px; text-align: center; }
     .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
-    .kwyx-row-label { width: 60px; font-weight: bold; }
+    .kwyx-row-label { width: auto; min-width: 60px; font-weight: bold; white-space: nowrap; }
     .kwyx-row.red { background: #ffe5e5; }
     .kwyx-row.yellow { background: #fff9c4; }
     .kwyx-row.green { background: #e8f5e9; }
