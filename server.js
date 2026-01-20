@@ -2433,7 +2433,15 @@ io.on("connection", (socket) => {
       const isActivePlayer = seatIndex === state.currentPlayer;
       const whiteRow = String(category?.whiteRow || "").trim().toLowerCase();
       const colorRow = String(category?.colorRow || "").trim().toLowerCase();
-      const colorSum = Number(category?.colorSum);
+      let colorSum = null;
+      if (typeof category?.colorSum === "number" && Number.isFinite(category.colorSum)) {
+        colorSum = category.colorSum;
+      } else if (typeof category?.colorSum === "string" && category.colorSum.trim() !== "") {
+        const parsed = Number(category.colorSum);
+        if (Number.isFinite(parsed)) {
+          colorSum = parsed;
+        }
+      }
       const wantsPenalty = !!category?.penalty;
       const whiteSum = state.dice[0] + state.dice[1];
       const colorDice = {
@@ -2444,7 +2452,7 @@ io.on("connection", (socket) => {
       };
 
       if (!isActivePlayer) {
-        if (colorRow || Number.isFinite(colorSum) || wantsPenalty) {
+        if (colorRow || colorSum !== null || wantsPenalty) {
           return socket.emit("error_msg", { message: "Passive Spieler dürfen nur die weißen Würfel nutzen." });
         }
       }
