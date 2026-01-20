@@ -234,6 +234,38 @@ function createSkatDeck() {
   return shuffleDeck(deck);
 }
 
+const SKAT_BID_VALUES = [
+  18, 20, 22, 23, 24, 27, 30, 33, 35, 36, 40, 44, 45, 46, 48, 50, 54, 55, 59, 60,
+  63, 66, 70, 72, 77, 80, 81, 84, 88, 90, 96, 99, 100, 108, 110, 120, 121, 126, 132,
+  135, 144, 150, 153, 160, 162, 168, 176, 180, 187, 192, 198, 204, 216, 220, 240, 264
+];
+
+const SKAT_BASE_VALUES = {
+  "♣": 12,
+  "♠": 11,
+  "♥": 10,
+  "♦": 9,
+  grand: 24
+};
+
+const SKAT_EYE_VALUES = {
+  A: 11,
+  "10": 10,
+  K: 4,
+  Q: 3,
+  J: 2,
+  "9": 0,
+  "8": 0,
+  "7": 0
+};
+
+const SKAT_NULL_VALUES = {
+  normal: 23,
+  hand: 35,
+  ouvert: 46,
+  handOuvert: 59
+};
+
 function dealSkatHands(players) {
   const deck = createSkatDeck();
   const hands = players.map(() => deck.splice(0, 10));
@@ -241,17 +273,68 @@ function dealSkatHands(players) {
   return { hands, skat };
 }
 
-function getSkatRankValue(rank) {
-  const order = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+function getSkatRankValue(rank, { nullGame } = {}) {
+  if (nullGame) {
+    const order = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+    return order.indexOf(rank);
+  }
+  const order = ["7", "8", "9", "Q", "K", "10", "A"];
   return order.indexOf(rank);
 }
 
-function determineSkatTrickWinner(trick, leadSuit) {
+function isSkatTrump(card, game) {
+  if (!card || !game) return false;
+  if (game.type === "null") return false;
+  if (card.rank === "J") return true;
+  if (game.type === "suit") {
+    return card.suit === game.suit;
+  }
+  return false;
+}
+
+function getSkatTrickRank(card, game, leadSuit) {
+  if (!card) return -1;
+  if (game.type === "null") {
+    const order = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+    if (leadSuit && card.suit !== leadSuit) return -1;
+    return order.indexOf(card.rank);
+  }
+  if (isSkatTrump(card, game)) {
+    if (card.rank === "J") {
+      const jackOrder = ["♣", "♠", "♥", "♦"];
+      return 100 + (jackOrder.length - jackOrder.indexOf(card.suit));
+    }
+    const trumpOrder = ["7", "8", "9", "Q", "K", "10", "A"];
+    return 50 + trumpOrder.indexOf(card.rank);
+  }
+  if (leadSuit === "trump" && isSkatTrump(card, game)) {
+    if (card.rank === "J") {
+      const jackOrder = ["♣", "♠", "♥", "♦"];
+      return 100 + (jackOrder.length - jackOrder.indexOf(card.suit));
+    }
+    const trumpOrder = ["7", "8", "9", "Q", "K", "10", "A"];
+    return 50 + trumpOrder.indexOf(card.rank);
+  }
+  if (leadSuit && leadSuit !== "trump" && card.suit === leadSuit) {
+    return getSkatRankValue(card.rank);
+  }
+  return -1;
+}
+
+function getSkatLeadSuit(card, game) {
+  if (!card) return null;
+  if (game.type !== "null" && isSkatTrump(card, game)) {
+    return "trump";
+  }
+  return card.suit;
+}
+
+function determineSkatTrickWinner(trick, leadSuit, game) {
   let bestIndex = 0;
   let bestValue = -1;
   trick.forEach((play, index) => {
-    if (!play.card || play.card.suit !== leadSuit) return;
-    const value = getSkatRankValue(play.card.rank);
+    if (!play.card) return;
+    const value = getSkatTrickRank(play.card, game, leadSuit);
     if (value > bestValue) {
       bestValue = value;
       bestIndex = index;
@@ -260,21 +343,160 @@ function determineSkatTrickWinner(trick, leadSuit) {
   return trick[bestIndex]?.seat ?? trick[0]?.seat ?? 0;
 }
 
+function getSkatCardPoints(card) {
+  return SKAT_EYE_VALUES[card?.rank] ?? 0;
+}
+
+function countSkatTrumps(cards, game) {
+  return cards.filter(card => isSkatTrump(card, game)).length;
+}
+
+function getSkatMatadors(cards, game) {
+  if (game.type === "null") return 0;
+  const topTrumps = [
+    { suit: "♣", rank: "J" },
+    { suit: "♠", rank: "J" },
+    { suit: "♥", rank: "J" },
+    { suit: "♦", rank: "J" }
+  ];
+  let count = 0;
+  for (const jack of topTrumps) {
+    const hasJack = cards.some(card => card.suit === jack.suit && card.rank === jack.rank);
+    if (hasJack) {
+      count += 1;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+function calculateSkatGameValue({ game, cards, hand, schneider, schwarz, ouvert }) {
+  if (game.type === "null") {
+    if (hand && ouvert) return SKAT_NULL_VALUES.handOuvert;
+    if (hand) return SKAT_NULL_VALUES.hand;
+    if (ouvert) return SKAT_NULL_VALUES.ouvert;
+    return SKAT_NULL_VALUES.normal;
+  }
+  const base = game.type === "grand" ? SKAT_BASE_VALUES.grand : SKAT_BASE_VALUES[game.suit];
+  const matadors = getSkatMatadors(cards, game);
+  let multiplier = 1 + matadors;
+  if (hand) multiplier += 1;
+  if (schneider) multiplier += 1;
+  if (schwarz) multiplier += 1;
+  if (ouvert) multiplier += 1;
+  return base * multiplier;
+}
+
+function initializeSkatBidding(state) {
+  const dealerSeat = state.dealerSeat;
+  const forehand = (dealerSeat + 1) % state.players.length;
+  const middlehand = (dealerSeat + 2) % state.players.length;
+  const rearhand = dealerSeat;
+  state.forehand = forehand;
+  state.middlehand = middlehand;
+  state.rearhand = rearhand;
+  state.phase = "bidding";
+  state.bidding = {
+    stage: "forehand_middlehand",
+    bidder: forehand,
+    listener: middlehand,
+    currentBidIndex: -1,
+    pendingBidIndex: null,
+    highestBidIndex: -1,
+    highestBidder: null,
+    passed: state.players.map(() => false),
+    waitingFor: "bidder"
+  };
+  state.currentPlayer = forehand;
+  state.message = `${state.players[forehand]} reizt ${state.players[middlehand]}.`;
+}
+
+function concludeSkatBidding(state) {
+  const highestBidIndex = state.bidding.highestBidIndex;
+  if (highestBidIndex < 0 || state.bidding.highestBidder === null) {
+    state.finished = true;
+    state.message = "Alle passen. Skat-Runde endet ohne Spiel.";
+    return;
+  }
+  state.declarer = state.bidding.highestBidder;
+  state.highestBid = SKAT_BID_VALUES[highestBidIndex];
+  state.phase = "skat";
+  state.currentPlayer = state.declarer;
+  state.message = `${state.players[state.declarer]} gewinnt das Reizen (${state.highestBid}) und nimmt den Skat.`;
+}
+
+function advanceSkatBidding(state) {
+  const bidding = state.bidding;
+  if (bidding.stage === "forehand_middlehand") {
+    if (!bidding.passed[bidding.listener] && !bidding.passed[bidding.bidder]) return;
+    let winner = bidding.bidder;
+    if (bidding.passed[bidding.bidder]) winner = bidding.listener;
+    if (bidding.passed[bidding.listener]) winner = bidding.bidder;
+    bidding.stage = "winner_rearhand";
+    bidding.bidder = winner;
+    bidding.listener = state.rearhand;
+    if (bidding.currentBidIndex >= 0) {
+      bidding.pendingBidIndex = bidding.currentBidIndex;
+      bidding.waitingFor = "listener";
+      state.currentPlayer = bidding.listener;
+      state.message = `${state.players[bidding.listener]}: hältst du ${SKAT_BID_VALUES[bidding.currentBidIndex]}?`;
+    } else {
+      bidding.pendingBidIndex = null;
+      bidding.waitingFor = "bidder";
+      state.currentPlayer = bidding.bidder;
+      state.message = `${state.players[bidding.bidder]} reizt ${state.players[bidding.listener]}.`;
+    }
+    return;
+  }
+  if (bidding.stage === "winner_rearhand") {
+    if (bidding.passed[bidding.listener]) {
+      concludeSkatBidding(state);
+      return;
+    }
+    if (bidding.passed[bidding.bidder]) {
+      if (bidding.currentBidIndex >= 0) {
+        bidding.highestBidder = bidding.listener;
+        bidding.highestBidIndex = bidding.currentBidIndex;
+      } else {
+        bidding.highestBidder = null;
+        bidding.highestBidIndex = -1;
+      }
+      concludeSkatBidding(state);
+    }
+  }
+}
+
 function createSkatState(players) {
   const { hands, skat } = dealSkatHands(players);
-  return {
+  const state = {
     gameType: "skat",
     players,
     currentPlayer: 0,
     hands,
     skat,
+    skatPile: [],
+    skatTaken: false,
+    discarded: false,
+    dealerSeat: 0,
+    forehand: 0,
+    middlehand: 0,
+    rearhand: 0,
+    phase: "bidding",
+    bidding: null,
+    declarer: null,
+    highestBid: null,
+    game: null,
+    trickPoints: players.map(() => 0),
     currentTrick: [],
     leadSuit: null,
     trickNumber: 1,
     trickWinners: [],
     finished: false,
-    message: "Skat läuft: Spiele reihum eine Karte aus."
+    message: ""
   };
+  initializeSkatBidding(state);
+  return state;
 }
 
 const KWYX_ROWS = ["red", "yellow", "green", "blue"];
@@ -1373,12 +1595,248 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  socket.on("skat_bid", ({ code, value }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "bidding") return;
+    if (state.finished) return socket.emit("error_msg", { message: "Spiel ist beendet." });
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const bidding = state.bidding;
+    if (!bidding || bidding.waitingFor !== "bidder") {
+      return socket.emit("error_msg", { message: "Du bist nicht am Reizen." });
+    }
+    if (state.currentPlayer !== bidding.bidder) {
+      return socket.emit("error_msg", { message: "Du bist nicht der Reizende." });
+    }
+
+    const bidValue = Number(value);
+    const bidIndex = SKAT_BID_VALUES.indexOf(bidValue);
+    if (bidIndex < 0) {
+      return socket.emit("error_msg", { message: "Ungültiger Reizwert." });
+    }
+    if (bidIndex <= bidding.currentBidIndex) {
+      return socket.emit("error_msg", { message: "Der Reizwert muss höher sein." });
+    }
+
+    bidding.pendingBidIndex = bidIndex;
+    bidding.waitingFor = "listener";
+    state.currentPlayer = bidding.listener;
+    state.message = `${state.players[bidding.bidder]} reizt ${bidValue}.`;
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("skat_hold", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "bidding") return;
+    if (state.finished) return socket.emit("error_msg", { message: "Spiel ist beendet." });
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const bidding = state.bidding;
+    if (!bidding || bidding.waitingFor !== "listener") {
+      return socket.emit("error_msg", { message: "Du kannst gerade nicht halten." });
+    }
+    if (state.currentPlayer !== bidding.listener) {
+      return socket.emit("error_msg", { message: "Du bist nicht der Antwortende." });
+    }
+    if (bidding.pendingBidIndex === null) {
+      return socket.emit("error_msg", { message: "Kein Reizwert offen." });
+    }
+
+    bidding.currentBidIndex = bidding.pendingBidIndex;
+    bidding.highestBidIndex = bidding.pendingBidIndex;
+    bidding.highestBidder = bidding.bidder;
+    bidding.pendingBidIndex = null;
+    bidding.waitingFor = "bidder";
+    state.currentPlayer = bidding.bidder;
+    state.message = `${state.players[bidding.listener]} hält ${SKAT_BID_VALUES[bidding.currentBidIndex]}.`;
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("skat_pass", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "bidding") return;
+    if (state.finished) return socket.emit("error_msg", { message: "Spiel ist beendet." });
+
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+
+    const bidding = state.bidding;
+    if (!bidding) return;
+    const actor = state.currentPlayer;
+    if (bidding.waitingFor === "listener" && actor !== bidding.listener) {
+      return socket.emit("error_msg", { message: "Du kannst gerade nicht passen." });
+    }
+    if (bidding.waitingFor === "bidder" && actor !== bidding.bidder) {
+      return socket.emit("error_msg", { message: "Du kannst gerade nicht passen." });
+    }
+
+    bidding.passed[actor] = true;
+    if (bidding.waitingFor === "listener") {
+      bidding.currentBidIndex = bidding.pendingBidIndex ?? bidding.currentBidIndex;
+      bidding.highestBidIndex = bidding.currentBidIndex;
+      bidding.highestBidder = bidding.bidder;
+      bidding.pendingBidIndex = null;
+    } else {
+      if (bidding.currentBidIndex < 0) {
+        bidding.highestBidIndex = -1;
+        bidding.highestBidder = null;
+      } else {
+        bidding.highestBidIndex = bidding.currentBidIndex;
+        bidding.highestBidder = bidding.listener;
+      }
+    }
+    state.message = `${state.players[actor]} passt.`;
+    advanceSkatBidding(state);
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("skat_take_skat", ({ code }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "skat") return;
+    if (state.declarer === null) return;
+    if (state.skatTaken) {
+      return socket.emit("error_msg", { message: "Skat wurde bereits aufgenommen." });
+    }
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+    if (state.currentPlayer !== state.declarer) {
+      return socket.emit("error_msg", { message: "Nur der Alleinspieler darf den Skat nehmen." });
+    }
+
+    state.hands[state.declarer] = state.hands[state.declarer].concat(state.skat);
+    state.skat = [];
+    state.skatTaken = true;
+    state.message = `${state.players[state.declarer]} nimmt den Skat und legt ab.`;
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("skat_discard", ({ code, cards }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "skat") return;
+    if (!state.skatTaken) {
+      return socket.emit("error_msg", { message: "Skat wurde noch nicht aufgenommen." });
+    }
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+    if (state.currentPlayer !== state.declarer) {
+      return socket.emit("error_msg", { message: "Nur der Alleinspieler darf abwerfen." });
+    }
+    const discardCards = Array.isArray(cards) ? cards : [];
+    if (discardCards.length !== 2) {
+      return socket.emit("error_msg", { message: "Du musst genau zwei Karten abwerfen." });
+    }
+    const hand = state.hands[state.declarer] || [];
+    const removed = [];
+    discardCards.forEach(card => {
+      const index = hand.findIndex(c => c.suit === card.suit && c.rank === card.rank);
+      if (index >= 0) {
+        removed.push(hand.splice(index, 1)[0]);
+      }
+    });
+    if (removed.length !== 2) {
+      return socket.emit("error_msg", { message: "Abwurfkarten nicht gefunden." });
+    }
+    state.skatPile = removed;
+    state.discarded = true;
+    state.message = `${state.players[state.declarer]} hat abgeworfen und wählt das Spiel.`;
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
+  socket.on("skat_choose_game", ({ code, type, suit, hand }) => {
+    const room = rooms.get(normalizeCode(code));
+    if (!room || room.status !== "running") return;
+    const state = room.state;
+    if (!state || state.gameType !== "skat" || state.phase !== "skat") return;
+    if (state.declarer === null) return;
+    const check = canAct(room, socket.id);
+    if (!check.ok) return socket.emit("error_msg", { message: check.error });
+    if (state.currentPlayer !== state.declarer) {
+      return socket.emit("error_msg", { message: "Nur der Alleinspieler darf das Spiel wählen." });
+    }
+    const gameType = String(type || "").toLowerCase();
+    const wantsHand = Boolean(hand);
+    if (wantsHand && state.skatTaken) {
+      return socket.emit("error_msg", { message: "Handspiel ohne Skataufnahme." });
+    }
+    if (!wantsHand && state.skatTaken && !state.discarded) {
+      return socket.emit("error_msg", { message: "Bitte zuerst zwei Karten abwerfen." });
+    }
+    if (gameType === "suit") {
+      if (!["♣", "♠", "♥", "♦"].includes(suit)) {
+        return socket.emit("error_msg", { message: "Ungültige Trumpffarbe." });
+      }
+    } else if (gameType !== "grand" && gameType !== "null") {
+      return socket.emit("error_msg", { message: "Ungültige Spielart." });
+    }
+
+    const game = {
+      type: gameType,
+      suit: gameType === "suit" ? suit : null,
+      hand: wantsHand,
+      ouvert: false
+    };
+
+    const matadorCards = state.hands[state.declarer].concat(state.skatTaken ? state.skatPile : []);
+    const baseValue = calculateSkatGameValue({
+      game,
+      cards: matadorCards,
+      hand: wantsHand,
+      schneider: false,
+      schwarz: false,
+      ouvert: false
+    });
+
+    if (state.highestBid && baseValue < state.highestBid) {
+      return socket.emit("error_msg", { message: `Spielwert ${baseValue} reicht nicht für das Reizgebot ${state.highestBid}.` });
+    }
+
+    state.game = game;
+    state.phase = "playing";
+    state.trickNumber = 1;
+    state.currentTrick = [];
+    state.leadSuit = null;
+    state.trickWinners = [];
+    state.trickPoints = state.players.map(() => 0);
+    state.currentPlayer = state.forehand;
+    state.message = `${state.players[state.declarer]} spielt ${gameType === "suit" ? `Farbspiel ${suit}` : gameType === "grand" ? "Grand" : "Null"}.`;
+
+    io.to(room.code).emit("state_update", state);
+    persistRooms();
+  });
+
   socket.on("skat_play_card", ({ code, card }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
 
     const state = room.state;
     if (!state || state.gameType !== "skat") return;
+    if (state.phase !== "playing") {
+      return socket.emit("error_msg", { message: "Skat ist noch nicht im Stichspiel." });
+    }
     if (state.finished) {
       return socket.emit("error_msg", { message: "Spiel ist beendet." });
     }
@@ -1398,22 +1856,35 @@ io.on("connection", (socket) => {
       return socket.emit("error_msg", { message: "Karte nicht auf der Hand." });
     }
 
+    const game = state.game;
+    if (!game) return socket.emit("error_msg", { message: "Spielart fehlt." });
     if (state.leadSuit) {
-      const hasLeadSuit = hand.some(c => c.suit === state.leadSuit);
-      if (hasLeadSuit && suit !== state.leadSuit) {
-        return socket.emit("error_msg", { message: "Du musst Farbe bedienen." });
+      if (state.leadSuit === "trump") {
+        const hasTrump = hand.some(c => isSkatTrump(c, game));
+        if (hasTrump && !isSkatTrump({ suit, rank }, game)) {
+          return socket.emit("error_msg", { message: "Du musst Trumpf bedienen." });
+        }
+      } else {
+        const hasLeadSuit = hand.some(c => c.suit === state.leadSuit && !isSkatTrump(c, game));
+        if (hasLeadSuit && (suit !== state.leadSuit || isSkatTrump({ suit, rank }, game))) {
+          return socket.emit("error_msg", { message: "Du musst Farbe bedienen." });
+        }
       }
     }
 
     const playedCard = hand.splice(cardIndex, 1)[0];
     if (!state.leadSuit) {
-      state.leadSuit = playedCard.suit;
+      state.leadSuit = getSkatLeadSuit(playedCard, game);
     }
     state.currentTrick.push({ seat: state.currentPlayer, card: playedCard });
     state.message = `${state.players[state.currentPlayer]} spielt ${playedCard.rank}${playedCard.suit}.`;
 
     if (state.currentTrick.length >= 3) {
-      const winnerSeat = determineSkatTrickWinner(state.currentTrick, state.leadSuit);
+      const winnerSeat = determineSkatTrickWinner(state.currentTrick, state.leadSuit, game);
+      const trickPoints = state.currentTrick.reduce((sum, play) => sum + getSkatCardPoints(play.card), 0);
+      if (game.type !== "null") {
+        state.trickPoints[winnerSeat] += trickPoints;
+      }
       state.trickWinners.push(winnerSeat);
       state.currentPlayer = winnerSeat;
       state.currentTrick = [];
@@ -1422,10 +1893,54 @@ io.on("connection", (socket) => {
 
       if (state.trickNumber > 10) {
         state.finished = true;
-        const counts = state.players.map((_, i) => state.trickWinners.filter(seat => seat === i).length);
-        const maxCount = Math.max(...counts);
-        const winners = state.players.filter((_, i) => counts[i] === maxCount);
-        state.message = `Skat beendet. Gewinner: ${winners.join(", ")} (${maxCount} Stiche).`;
+        if (game.type === "null") {
+          const declarerTricks = state.trickWinners.filter(seat => seat === state.declarer).length;
+          const declarerWins = declarerTricks === 0;
+          const nullValue = calculateSkatGameValue({
+            game,
+            cards: [],
+            hand: state.game?.hand,
+            schneider: false,
+            schwarz: false,
+            ouvert: false
+          });
+          state.game.result = {
+            declarerTricks,
+            won: declarerWins,
+            value: declarerWins ? nullValue : -nullValue
+          };
+          state.message = declarerWins
+            ? `${state.players[state.declarer]} gewinnt Null. Wert: ${nullValue}.`
+            : `${state.players[state.declarer]} verliert Null. Wert: ${nullValue}.`;
+        } else {
+          const totalPoints = state.trickPoints.reduce((sum, value) => sum + value, 0);
+          const skatPoints = state.skatPile.reduce((sum, card) => sum + getSkatCardPoints(card), 0);
+          const declarerPoints = (state.trickPoints[state.declarer] || 0) + skatPoints;
+          const defendersPoints = totalPoints - (state.trickPoints[state.declarer] || 0);
+          const declarerWon = declarerPoints >= 61;
+          const schneider = declarerPoints >= 90 || defendersPoints <= 30;
+          const schwarz = state.trickWinners.every(seat => seat === state.declarer);
+          const cardsForValue = state.hands[state.declarer].concat(state.skatPile);
+          const gameValue = calculateSkatGameValue({
+            game,
+            cards: cardsForValue,
+            hand: state.game?.hand,
+            schneider,
+            schwarz,
+            ouvert: false
+          });
+          state.game.result = {
+            declarerPoints,
+            defendersPoints,
+            schneider,
+            schwarz,
+            won: declarerWon,
+            value: declarerWon ? gameValue : -gameValue
+          };
+          state.message = declarerWon
+            ? `${state.players[state.declarer]} gewinnt (${declarerPoints} Augen). Wert: ${gameValue}.`
+            : `${state.players[state.declarer]} verliert (${declarerPoints} Augen). Wert: ${gameValue}.`;
+        }
       } else {
         state.message = `${state.players[winnerSeat]} gewinnt den Stich.`;
       }
