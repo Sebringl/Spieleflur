@@ -1670,7 +1670,8 @@
       const nextRoundInfo = state.roundPending && !state.finished
         ? `Neue Runde wartet auf ${state.players[state.nextStartingSeat] ?? "?"}`
         : "";
-      const info = [state.message, knockInfo, nextRoundInfo].filter(Boolean).join(" · ");
+      const roundMessage = state.roundPending ? "" : state.message;
+      const info = [roundMessage, knockInfo, nextRoundInfo].filter(Boolean).join(" · ");
       document.getElementById("schwimmenResult").textContent = info;
 
       renderSchwimmenScores();
