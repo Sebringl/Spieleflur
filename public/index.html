@@ -203,12 +203,23 @@
       .kwyx-row.penalty .kwyx-row-label { margin-bottom: 4px; }
       .kwyx-cells { gap: clamp(2px, 1vw, 5px); }
       .kwyx-cell { min-height: clamp(46px, 13vw, 68px); }
+      .kwyx-cells {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(clamp(30px, 12vw, 44px), 1fr));
+        gap: 4px;
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100%;
+      }
+      .kwyx-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 5px; }
     }
 
     @media (max-width: 600px) {
       .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: 1; padding: 6px; }
       .kwyx-cell { font-size: clamp(15px, 4.8vw, 19px); }
       .kwyx-cell.lock { font-size: clamp(15px, 4.8vw, 19px); }
+      .kwyx-cell { font-size: clamp(10px, 3vw, 12px); }
+      .kwyx-cell.lock { font-size: clamp(10px, 3vw, 12px); }
       .kwyx-card { margin: 8px 0; }
       .card { font-size: 24px; }
       .card-row { gap: 6px; }
