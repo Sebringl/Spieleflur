@@ -1,24 +1,30 @@
+// Server für Spieleflur: Express liefert statische Dateien, Socket.IO sorgt für Echtzeit-Spielzüge.
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import crypto from "crypto";
 import fs from "fs/promises";
 
+// Express-App einrichten.
 const app = express();
+// Alle Seiten sollen nicht indexiert werden (Private Games/Lobbys).
 app.use((req, res, next) => {
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();
 });
+// Statische Inhalte (HTML, Bilder, JS) aus dem public-Ordner ausliefern.
 app.use(express.static("public"));
 
 // Keepalive endpoint: hält Free-Service während des Spiels wach
 app.get("/ping", (req, res) => res.status(200).send("ok"));
 
+// HTTP-Server als Grundlage für Socket.IO.
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// Zeitlimits für Lobby-Inaktivität.
 const LOBBY_INACTIVITY_MS = 120 * 1000;
 const LOBBY_WARNING_MS = 30 * 1000;
 
@@ -29,6 +35,7 @@ const CODE_LENGTH = 5;
 const DEFAULT_GAME_TYPE = "classic";
 const GAME_TYPES = new Set(["classic", "quick"]);
 
+// Erzeugt einen lesbaren Room-Code (ohne leicht verwechselbare Zeichen).
 function makeCode(len = CODE_LENGTH) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   let s = "";
@@ -36,27 +43,33 @@ function makeCode(len = CODE_LENGTH) {
   return s;
 }
 
+// Einheitliche Normalisierung für Room-Codes.
 function normalizeCode(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+// Prüft, ob ein Code das erlaubte Alphabet und die Länge hat.
 function isValidCode(code, len = CODE_LENGTH) {
   const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   if (!code || code.length !== len) return false;
   return [...code].every(ch => alphabet.includes(ch));
 }
+// Zufälliges Token für Spielersitz/Host-Rechte.
 function makeToken() {
   return crypto.randomBytes(16).toString("hex");
 }
+// Würfelt einen normalen W6.
 function rollDie() {
   return Math.floor(Math.random() * 6) + 1;
 }
+// Standardisiertes Game-Type-Parsing (z.B. für Schnellspiel).
 function normalizeGameType(value) {
   const candidate = String(value || "").trim().toLowerCase();
   if (GAME_TYPES.has(candidate)) return candidate;
   return DEFAULT_GAME_TYPE;
 }
 
+// Spieltyp für Rooms normalisieren (Schocken, Kniffel, Schwimmen, Skat, Kwyx).
 function normalizeRoomGameType(value) {
   const candidate = String(value || "").trim().toLowerCase();
   if (candidate === "kniffel") return "kniffel";
@@ -348,6 +361,7 @@ function getSkatCardPoints(card) {
   return SKAT_EYE_VALUES[card?.rank] ?? 0;
 }
 
+// Zählt Trumpfkarten in einer Hand (Hilfsfunktion).
 function countSkatTrumps(cards, game) {
   return cards.filter(card => isSkatTrump(card, game)).length;
 }
@@ -477,6 +491,7 @@ function advanceSkatBidding(state) {
   }
 }
 
+// Initialzustand für Skat.
 function createSkatState(players) {
   const { hands, skat } = dealSkatHands(players);
   const state = {
@@ -557,12 +572,14 @@ function createKwyxState(players) {
   };
 }
 
+// Hilfsfunktion: Position einer Zahl in einer Reihe.
 function getKwyxRowIndex(color, value) {
   const numbers = KWYX_NUMBERS[color];
   if (!numbers) return -1;
   return numbers.indexOf(value);
 }
 
+// Zählt gesetzte Kreuze in einer Reihe.
 function countKwyxMarks(row) {
   return row.reduce((acc, marked) => acc + (marked ? 1 : 0), 0);
 }
@@ -596,6 +613,7 @@ function canMarkKwyxRow(state, card, color, value) {
   return { ok: true, index, isLastField };
 }
 
+// Punkteberechnung für eine Kwyx-Karte.
 function scoreKwyxCard(card) {
   const rowScore = color => {
     const marks = countKwyxMarks(card[color]);
@@ -606,14 +624,17 @@ function scoreKwyxCard(card) {
   return totalRows - card.strikes * 5;
 }
 
+// Aktualisiert die Summenanzeige.
 function updateKwyxTotals(state) {
   state.totals = state.scorecards.map(card => scoreKwyxCard(card));
 }
 
+// Ordnet ein Socket zu einem Sitzplatz.
 function getSeatIndexBySocket(room, socketId) {
   return room.players.findIndex(player => player.socketId === socketId);
 }
 
+// Stellt sicher, dass Kwyx-Zustände initialisiert sind.
 function ensureKwyxTurnState(state) {
   if (!Array.isArray(state.kwyxEnded) || state.kwyxEnded.length !== state.players.length) {
     state.kwyxEnded = state.players.map(() => false);
@@ -626,12 +647,14 @@ function ensureKwyxTurnState(state) {
   }
 }
 
+// Setzt Kwyx-Zugzustand zurück.
 function resetKwyxTurnState(state) {
   state.kwyxEnded = state.players.map(() => false);
   state.kwyxCountdownEndsAt = null;
   state.kwyxPendingFinish = false;
 }
 
+// Stoppt den Countdown-Timer für Kwyx.
 function clearKwyxCountdown(room, state) {
   if (room.kwyxCountdownTimer) {
     clearTimeout(room.kwyxCountdownTimer);
@@ -640,12 +663,14 @@ function clearKwyxCountdown(room, state) {
   state.kwyxCountdownEndsAt = null;
 }
 
+// Prüft, ob das Spielende erreicht ist.
 function shouldFinishKwyxGame(state) {
   const lockedRows = KWYX_ROWS.filter(color => state.rowLocks[color]).length;
   const strikeOut = state.scorecards.some(scorecard => scorecard.strikes >= 4);
   return lockedRows >= 2 || strikeOut;
 }
 
+// Beendet einen Kwyx-Zug, aktualisiert Spielerwechsel und ggf. Ende.
 function finalizeKwyxTurn(room) {
   const state = room.state;
   if (!state || state.gameType !== "kwyx") return;
@@ -1004,21 +1029,24 @@ function sortScores(scores) {
     });
 }
 
-// In final mode only those seats act, but we do NOT reindex arrays (seat indices stay stable)
+// Finalmodus: nur Finalisten spielen, Sitz-Indizes bleiben stabil.
 function activeOrder(state) {
   if (state.inFinal && state.finalPlayers.length >= 2) return state.finalPlayers.slice();
   return state.players.map((_, i) => i);
 }
 
+// Wandelt Sitzplatz in Position innerhalb der Reihenfolge.
 function seatToOrderPos(order, seat) {
   const pos = order.indexOf(seat);
   return pos >= 0 ? pos : 0;
 }
 
+// Setzt aktuellen Spieler anhand der Reihenfolge.
 function setCurrentFromOrder(state, order, orderPos) {
   state.currentPlayer = order[orderPos];
 }
 
+// Wechselt zum nächsten Spieler oder startet die Rundenwertung.
 function nextPlayer(state) {
   const order = activeOrder(state);
   state.playerTurnIndex++;
@@ -1035,6 +1063,7 @@ function nextPlayer(state) {
   prepareNextRound(state);
 }
 
+// Host kann den aktuellen Spieler weiterdrehen (Moderation).
 function rotateCurrentPlayer(state) {
   const order = activeOrder(state);
   if (order.length === 0) return;
@@ -1048,6 +1077,7 @@ function rotateCurrentPlayer(state) {
   state.message = "Host hat den nächsten Spieler gewählt.";
 }
 
+// Wertung einer Schocken-Runde und Vorbereitung der nächsten Runde.
 function prepareNextRound(state) {
   const order = activeOrder(state);
 
@@ -1124,6 +1154,7 @@ function prepareNextRound(state) {
   resetTurn(state);
 }
 
+// Startet ein neues Spiel und erstellt den passenden Anfangszustand.
 function startNewGame(room) {
   if (room.settings.gameType === "kniffel") {
     const state = createKniffelState();
@@ -1167,6 +1198,7 @@ function startNewGame(room) {
   room.status = "running";
 }
 
+// Prüft, ob ein Socket gerade am Zug ist.
 function canAct(room, socketId) {
   const state = room.state;
   const seat = state.currentPlayer;
@@ -1176,6 +1208,7 @@ function canAct(room, socketId) {
   return { ok: true };
 }
 
+// "Sichere" Darstellung für Clients (ohne Tokens).
 function safeRoom(room) {
   return {
     code: room.code,
@@ -1186,6 +1219,7 @@ function safeRoom(room) {
   };
 }
 
+// Erzeugt die Lobby-Liste für alle Clients.
 function getLobbyList() {
   cleanupInactiveLobbies({ emit: false });
   cleanupEmptyLobbies();
@@ -1200,10 +1234,12 @@ function getLobbyList() {
     }));
 }
 
+// Sendet die Lobby-Liste an alle Clients.
 function emitLobbyList() {
   io.emit("lobby_list", { lobbies: getLobbyList() });
 }
 
+// Löscht leere Lobbys (keiner verbunden).
 function cleanupEmptyLobbies() {
   let removed = false;
   for (const room of rooms.values()) {
@@ -1219,11 +1255,13 @@ function cleanupEmptyLobbies() {
   }
 }
 
+// Merkt die letzte Aktivität der Lobby (für Zeitouts).
 function markLobbyActivity(room) {
   room.lastLobbyActivity = Date.now();
   room.lobbyWarnedAt = null;
 }
 
+// Warnung: Lobby läuft gleich ab.
 function warnLobbyExpiry(room, secondsLeft) {
   if (room.lobbyWarnedAt) return;
   room.lobbyWarnedAt = Date.now();
@@ -1233,6 +1271,7 @@ function warnLobbyExpiry(room, secondsLeft) {
   });
 }
 
+// Löscht eine inaktive Lobby und informiert die Clients.
 function deleteExpiredLobby(room) {
   io.to(room.code).emit("lobby_deleted", {
     code: room.code,
@@ -1241,6 +1280,7 @@ function deleteExpiredLobby(room) {
   rooms.delete(room.code);
 }
 
+// Prüft, ob Lobbys inaktiv sind und räumt ggf. auf.
 function cleanupInactiveLobbies({ emit = true } = {}) {
   let removed = false;
   const now = Date.now();
@@ -1267,6 +1307,7 @@ function cleanupInactiveLobbies({ emit = true } = {}) {
   }
 }
 
+// Findet die Lobby zu einem Socket (falls vorhanden).
 function getSocketRoom(socket) {
   const code = normalizeCode(socket.data?.roomCode);
   if (!code) return null;
@@ -1278,6 +1319,7 @@ function getSocketRoom(socket) {
   return room;
 }
 
+// Verhindert doppelte Lobby-Zuordnung.
 function blockIfAlreadyInRoom(socket) {
   if (getSocketRoom(socket)) {
     socket.emit("error_msg", { message: "Du bist bereits in einer Lobby. Bitte wieder beitreten." });
@@ -1286,6 +1328,7 @@ function blockIfAlreadyInRoom(socket) {
   return false;
 }
 
+// Zusammenfassung offener Beitrittsanfragen.
 function pendingSummary(room) {
   return (room.pendingRequests || []).map(req => ({
     id: req.id,
@@ -1294,6 +1337,7 @@ function pendingSummary(room) {
   }));
 }
 
+// Sendet Pending-Requests an den Host.
 function emitPendingRequests(room) {
   const host = room.players[room.hostSeat];
   if (host?.socketId) {
@@ -1304,12 +1348,14 @@ function emitPendingRequests(room) {
   }
 }
 
+// Aktualisiert Einstellungen der Lobby (Spieltyp/Deckel).
 function updateRoomSettings({ room, useDeckel, gameType }) {
   const nextGameType = normalizeRoomGameType(gameType);
   room.settings.gameType = nextGameType;
   room.settings.useDeckel = nextGameType === "schocken" ? !!useDeckel : false;
 }
 
+// Entfernt einen Spieler aus der Lobby und korrigiert Host-Sitz.
 function removePlayerFromRoom({ room, seatIndex }) {
   const [removed] = room.players.splice(seatIndex, 1);
   if (seatIndex < room.hostSeat) {
@@ -1325,6 +1371,7 @@ function removePlayerFromRoom({ room, seatIndex }) {
   return removed;
 }
 
+// Bearbeitet eine Join-Anfrage (Host muss bestätigen).
 function handleJoinRequest(socket, { code, name }) {
   const room = rooms.get(normalizeCode(code));
   if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -1360,6 +1407,7 @@ function handleJoinRequest(socket, { code, name }) {
   emitPendingRequests(room);
 }
 
+// Reconnect per Namen (wenn der alte Sitz noch frei ist).
 function tryReconnectByName({ room, socket, name }) {
   const cleanName = String(name || "").trim();
   if (!cleanName) return false;
@@ -1395,6 +1443,7 @@ function tryReconnectByName({ room, socket, name }) {
   return true;
 }
 
+// Erstellt eine neue Lobby (mit optionalem Wunsch-Code).
 function createRoom({ socket, name, useDeckel, gameType, requestedCode }) {
   let code;
   const normalizedRequested = normalizeCode(requestedCode);
@@ -1448,6 +1497,7 @@ function createRoom({ socket, name, useDeckel, gameType, requestedCode }) {
   emitLobbyList();
 }
 
+// Speichert Lobby-Zustände auf die Platte.
 async function persistRooms() {
   const data = [...rooms.values()].map(room => ({
     code: room.code,
@@ -1471,6 +1521,7 @@ async function persistRooms() {
   }
 }
 
+// Lädt Lobby-Zustände von der Platte (beim Serverstart).
 async function loadRooms() {
   try {
     const raw = await fs.readFile(ROOMS_FILE, "utf-8");
@@ -1503,30 +1554,37 @@ async function loadRooms() {
   }
 }
 
+// Gespeicherte Lobbys einlesen.
 loadRooms();
 
+// Regelmäßig Inaktivität prüfen.
 setInterval(() => {
   cleanupInactiveLobbies();
 }, 5000);
 
 // ---- Socket.IO ----
 io.on("connection", (socket) => {
+  // Beim Connect sofort die Lobby-Liste senden.
   socket.emit("lobby_list", { lobbies: getLobbyList() });
 
+  // Explizites Refresh der Lobby-Liste.
   socket.on("get_lobby_list", () => {
     socket.emit("lobby_list", { lobbies: getLobbyList() });
   });
 
+  // Host erstellt eine neue Lobby.
   socket.on("create_room", ({ name, useDeckel, gameType, requestedCode }) => {
     if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
     createRoom({ socket, name: cleanName, useDeckel, gameType, requestedCode });
   });
 
+  // Beitritt anfragen (Host bestätigt).
   socket.on("request_join", ({ code, name }) => {
     handleJoinRequest(socket, { code, name });
   });
 
+  // Entry-Punkt: entweder Lobby beitreten oder neue erstellen.
   socket.on("enter_room", ({ name, requestedCode, useDeckel, gameType }) => {
     if (blockIfAlreadyInRoom(socket)) return;
     const cleanName = String(name || "").trim() || "Spieler";
@@ -1541,6 +1599,7 @@ io.on("connection", (socket) => {
     createRoom({ socket, name: cleanName, useDeckel, gameType, requestedCode: normalized });
   });
 
+  // Host akzeptiert/ablehnt eine Beitrittsanfrage.
   socket.on("approve_join", ({ code, token, requestId, accept }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
@@ -1608,10 +1667,12 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Alias für Join-Anfrage (Alt-Client).
   socket.on("join_room", ({ code, name }) => {
     handleJoinRequest(socket, { code, name });
   });
 
+  // Rejoin mit Token (z.B. nach Reload).
   socket.on("rejoin_room", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -1642,6 +1703,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Host startet das Spiel.
   socket.on("start_game", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
@@ -1660,6 +1722,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Host ändert Lobby-Einstellungen.
   socket.on("update_room_settings", ({ code, token, useDeckel, gameType }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
@@ -1672,6 +1735,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Reizen (Gebot).
   socket.on("skat_bid", ({ code, value }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1708,6 +1772,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Halten.
   socket.on("skat_hold", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1741,6 +1806,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Passen.
   socket.on("skat_pass", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1783,6 +1849,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Skat aufnehmen.
   socket.on("skat_take_skat", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1807,6 +1874,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: 2 Karten abwerfen.
   socket.on("skat_discard", ({ code, cards }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1843,6 +1911,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Spielart ansagen.
   socket.on("skat_choose_game", ({ code, type, suit, hand }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -1905,6 +1974,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Skat: Karte ausspielen.
   socket.on("skat_play_card", ({ code, card }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2029,6 +2099,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Schwimmen: eine Handkarte mit Tischkarte tauschen.
   socket.on("schwimmen_swap", ({ code, handIndex, tableIndex }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2071,6 +2142,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Schwimmen: alle 3 Karten tauschen.
   socket.on("schwimmen_swap_all", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2108,6 +2180,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Schwimmen: schieben (passen).
   socket.on("schwimmen_pass", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2141,6 +2214,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Schwimmen: klopfen (Rundenende einleiten).
   socket.on("schwimmen_knock", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2173,6 +2247,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Schwimmen: nächste Runde starten (i.d.R. Verlierer).
   socket.on("schwimmen_start_round", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2199,6 +2274,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Lobby verlassen (nur vor Spielstart).
   socket.on("leave_room", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return socket.emit("error_msg", { message: "Room-Code nicht gefunden." });
@@ -2222,6 +2298,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Spiel abbrechen und zurück in die Lobby (nur Host).
   socket.on("return_lobby", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
@@ -2237,6 +2314,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Lobby aktiv halten, um Timeout zu verhindern.
   socket.on("keep_lobby", ({ code, token }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room) return;
@@ -2252,6 +2330,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Würfeln (Schocken/Kniffel/Kwyx).
   socket.on("action_roll", ({ code }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2322,6 +2401,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Würfel auswählen/halten oder 6->1 drehen (Schocken/Kniffel).
   socket.on("action_toggle", ({ code, index }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2384,6 +2464,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Zug beenden (Score setzen / Runde beenden).
   socket.on("action_end_turn", ({ code, category }) => {
     const room = rooms.get(normalizeCode(code));
     if (!room || room.status !== "running") return;
@@ -2599,6 +2680,7 @@ io.on("connection", (socket) => {
     persistRooms();
   });
 
+  // Verbindung getrennt: Spieler als offline markieren.
   socket.on("disconnect", () => {
     for (const room of rooms.values()) {
       if (room.pendingRequests) {

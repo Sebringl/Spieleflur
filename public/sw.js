@@ -1,11 +1,14 @@
+// Service Worker: sofort aktivieren, damit Benachrichtigungen funktionieren.
 self.addEventListener("install", event => {
   event.waitUntil(self.skipWaiting());
 });
 
+// Nach Aktivierung sofort Kontrolle über bestehende Tabs übernehmen.
 self.addEventListener("activate", event => {
   event.waitUntil(self.clients.claim());
 });
 
+// Klick auf Push-Notification: Aktion an Clients weiterreichen und Tab fokussieren.
 self.addEventListener("notificationclick", event => {
   const action = event.action;
   const data = event.notification?.data || {};
@@ -31,6 +34,7 @@ self.addEventListener("notificationclick", event => {
   );
 });
 
+// Empfang einer Push-Notification (z.B. "du bist am Zug").
 self.addEventListener("push", event => {
   let data = {};
   try {

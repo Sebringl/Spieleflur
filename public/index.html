@@ -8,6 +8,7 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    /* Basis-Layout und UI-Elemente (Lobby + Spielansichten). */
     html { font-size: 18px; }
     body {
       font-family: Arial, sans-serif;
@@ -272,13 +273,16 @@
   </style>
 </head>
 <body>
+  <!-- Seitenkopf mit dynamischem Logo je Spieltyp -->
   <h1 id="pageTitle" class="page-title">
     <img id="pageTitleLogo" class="page-title-logo" src="/header_Lobby.png" alt="Spieleflur Lobby" />
     <span id="pageTitleText" class="visually-hidden">Spieleflur (Lobby)</span>
   </h1>
 
+  <!-- Lobby-Ansicht: Spiel erstellen/beitreten und Lobby-Status -->
   <div id="lobby">
     <div id="lobbyCard">
+      <!-- Spieltyp-Einstellungen (nur Host ändert) -->
       <div class="toggle-row" role="group" aria-label="Spieltyp Einstellungen">
         <label for="gameTypeSelect">Spieltyp</label>
         <select id="gameTypeSelect">
@@ -295,6 +299,7 @@
       </div>
 
       <hr />
+      <!-- Rejoin-Box: gespeicherten Lobby-Login wiederverwenden -->
       <div id="rejoinBox" style="display:none;">
         <h3>Wieder beitreten</h3>
         <div class="small">Wir haben ein gespeichertes Room-Login gefunden.</div>
@@ -316,11 +321,13 @@
       <div id="joinStatus" class="small muted"></div>
 
       <hr />
+      <!-- Öffentliche Lobby-Liste (nur wenn man nicht in einer Lobby ist) -->
       <div class="lobby-list" id="activeLobbies">
         <div class="small muted">Aktive Lobbys werden geladen…</div>
       </div>
 
       <hr />
+      <!-- Eigene Lobby-Details (sichtbar sobald man in einer Lobby ist) -->
       <div id="roomView" style="display:none;">
         <h3>Room</h3>
         <div class="codeBig" id="roomCodeBig">------</div>
@@ -344,6 +351,7 @@
     </div>
   </div>
 
+  <!-- Spiel-Ansicht: je nach Spieltyp werden unterschiedliche Bereiche sichtbar -->
   <div id="game" style="display:none;">
     <div class="refresh-row">
       <button id="btnReload" class="icon-btn" title="Neu laden" aria-label="Neu laden">🔄</button>
@@ -351,6 +359,7 @@
     <h2 id="playerDisplay">Am Zug: -</h2>
     <div class="small" id="turnHint"></div>
 
+    <!-- Schocken-Ansicht -->
     <div id="schockenView">
       <div class="dice-container kwyx-dice-container">
         <div class="die" id="die0">□</div>
@@ -366,6 +375,7 @@
       <div id="result"></div>
     </div>
 
+    <!-- Kniffel/Yahtzee-Ansicht -->
     <div id="kniffelView" style="display:none;">
       <div class="dice-container kwyx-dice-container">
         <div class="die" id="kniffelDie0">□</div>
@@ -383,6 +393,7 @@
       <div id="kniffelScoreTable" style="margin-top: 14px;"></div>
     </div>
 
+    <!-- Kwyx-Ansicht -->
     <div id="kwyxView" style="display:none;">
       <div class="dice-container kwyx-dice-container">
         <div class="die kwyx-die white" id="kwyxDieWhite0">□</div>
@@ -428,6 +439,7 @@
       </div>
     </div>
 
+    <!-- Schwimmen-Ansicht -->
     <div id="schwimmenView" style="display:none;">
       <div class="small muted">Tischkarten</div>
       <div class="card-row" id="schwimmenTable"></div>
@@ -447,6 +459,7 @@
       <div id="schwimmenScores" style="margin-top: 14px;"></div>
     </div>
 
+    <!-- Skat-Ansicht -->
     <div id="skatView" style="display:none;">
       <div class="small muted">Skat (3 Spieler)</div>
       <div id="skatBidding" style="margin-top: 10px;"></div>
@@ -471,8 +484,10 @@
     <a class="impressum-link" href="/impressum.html" target="_blank" rel="noopener noreferrer">Impressum</a>
   </footer>
 
+  <!-- Socket.IO Client für Echtzeit-Kommunikation -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Einstieg: Socket.IO-Verbindung zum Server.
     const socket = io();
 
     // Darstellungen und Farbschemata für Würfel und Spieler.
