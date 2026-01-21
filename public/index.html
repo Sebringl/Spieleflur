@@ -1361,7 +1361,20 @@
 
       updateKwyxEndButton();
 
-      document.getElementById("kwyxTurnHint").textContent = "";
+      const kwyxTurnHint = document.getElementById("kwyxTurnHint");
+      if (kwyxTurnHint) {
+        const countdown = getKwyxCountdownSeconds();
+        const myEnded = !!state.kwyxEnded?.[mySeat];
+        const hasSelection = !!(kwyxSelections.whiteRow || kwyxSelections.colorRow || kwyxSelections.penalty);
+        const showPassiveCountdownHint = countdown !== null
+          && !myTurn
+          && !myEnded
+          && mySeat >= 0
+          && !hasSelection;
+        kwyxTurnHint.textContent = showPassiveCountdownHint
+          ? "Countdown läuft – du hast noch kein Feld ausgewählt."
+          : "";
+      }
       document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
       updateDeckelToggleState();
