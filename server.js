@@ -360,14 +360,23 @@ function getSkatMatadors(cards, game) {
     { suit: "♥", rank: "J" },
     { suit: "♦", rank: "J" }
   ];
+  const hasTopJack = cards.some(card => card.suit === topTrumps[0].suit && card.rank === topTrumps[0].rank);
   let count = 0;
+  if (hasTopJack) {
+    for (const jack of topTrumps) {
+      const hasJack = cards.some(card => card.suit === jack.suit && card.rank === jack.rank);
+      if (hasJack) {
+        count += 1;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
   for (const jack of topTrumps) {
     const hasJack = cards.some(card => card.suit === jack.suit && card.rank === jack.rank);
-    if (hasJack) {
-      count += 1;
-    } else {
-      break;
-    }
+    if (hasJack) break;
+    count += 1;
   }
   return count;
 }
