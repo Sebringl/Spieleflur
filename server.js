@@ -100,7 +100,8 @@ function createInitialState({ useDeckel }) {
     inFinal: false,
     finalPlayers: [],
 
-    message: ""
+    message: "",
+    roundJustEnded: false
   };
 }
 
@@ -1014,7 +1015,9 @@ function nextPlayer(state) {
   state.playerTurnIndex++;
 
   if (state.playerTurnIndex < order.length) {
-    setCurrentFromOrder(state, order, seatToOrderPos(order, state.startPlayerIndex) + state.playerTurnIndex);
+    const startPos = seatToOrderPos(order, state.startPlayerIndex);
+    const nextPos = (startPos + state.playerTurnIndex) % order.length;
+    setCurrentFromOrder(state, order, nextPos);
     resetTurn(state);
     state.message = "";
     return;
@@ -1096,6 +1099,7 @@ function prepareNextRound(state) {
   // Nächste Runde Setup
   state.roundNumber++;
   state.history.push(new Array(state.players.length).fill(null));
+  state.roundJustEnded = true;
 
   state.maxThrowsThisRound = 3;
   state.startPlayerIndex = loserSeat; // loser beginnt
@@ -2288,6 +2292,11 @@ io.on("connection", (socket) => {
 
     if (state.throwCount >= state.maxThrowsThisRound) {
       return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
+    }
+
+    if (state.roundJustEnded) {
+      state.message = "";
+      state.roundJustEnded = false;
     }
 
     state.convertedThisTurn = false;
