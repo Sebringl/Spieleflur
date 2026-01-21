@@ -103,7 +103,9 @@
     #kniffelScoreTable .score-table th,
     #kniffelScoreTable .score-table td { vertical-align: middle; }
     #kniffelScoreTable .score-table td.kniffel-score-cell { padding: 0; }
-    #kniffelScoreTable .score-table .bonus-achieved { background-color: #e8f5e9; font-weight: bold; }
+    #kniffelScoreTable .score-table .bonus-achieved { font-weight: bold; color: #2e7d32; }
+    #kniffelScoreTable .score-table tr.kniffel-subtotal th,
+    #kniffelScoreTable .score-table tr.kniffel-subtotal td { background-color: #f2f2f2; }
     .score-table {
       border-collapse: collapse; /* Entfernt Lücken zwischen den Zellen */
       width: 100%;
@@ -247,6 +249,7 @@
       --page-bg: #121212;
       --page-text: #f2f2f2;
     }
+    body.dark-mode .held { background-color: #1f3a22; border-color: #5bbf6a; }
     body.dark-mode #historyTable th,
     body.dark-mode #historyTable td,
     body.dark-mode .score-table th,
@@ -280,7 +283,25 @@
     body.dark-mode footer,
     body.dark-mode .impressum-link { color: #aaa; }
     body.dark-mode .theme-toggle { background: #1a1a1a; border-color: #444; color: #f2f2f2; }
-    body.dark-mode #kniffelScoreTable .score-table .bonus-achieved { background-color: #1f3a22; }
+    body.dark-mode #kniffelScoreTable .score-table .bonus-achieved { color: #8bd68f; }
+    body.dark-mode #kniffelScoreTable .score-table tr.kniffel-subtotal th,
+    body.dark-mode #kniffelScoreTable .score-table tr.kniffel-subtotal td { background-color: #2a2a2a; }
+    body.dark-mode .pill.ok { background: #1f3a22; color: #c8e6c9; border-color: #2f5f34; }
+    body.dark-mode .pill.bad { background: #3b1f1f; color: #f4c7c3; border-color: #6a2c2c; }
+    body.dark-mode .pill.neutral { background: #2a2a2a; color: #d0d0d0; border-color: #444; }
+    body.dark-mode .kwyx-die.white { background: #2a2a2a; border-color: #555; color: #f2f2f2; }
+    body.dark-mode .kwyx-die.red { background: #3b1f1f; border-color: #6a2c2c; color: #f4c7c3; }
+    body.dark-mode .kwyx-die.yellow { background: #3a3320; border-color: #7a5c1a; color: #f0e1a8; }
+    body.dark-mode .kwyx-die.green { background: #1f3a22; border-color: #2f5f34; color: #c8e6c9; }
+    body.dark-mode .kwyx-die.blue { background: #1f2a3b; border-color: #2b4c7a; color: #c3d7f5; }
+    body.dark-mode .kwyx-row.red { background: #2f1a1a; }
+    body.dark-mode .kwyx-row.yellow { background: #2f2918; }
+    body.dark-mode .kwyx-row.green { background: #1b2a1e; }
+    body.dark-mode .kwyx-row.blue { background: #1a2330; }
+    body.dark-mode .kwyx-row.red .kwyx-cell { color: #f4c7c3; }
+    body.dark-mode .kwyx-row.yellow .kwyx-cell { color: #f0e1a8; }
+    body.dark-mode .kwyx-row.green .kwyx-cell { color: #c8e6c9; }
+    body.dark-mode .kwyx-row.blue .kwyx-cell { color: #c3d7f5; }
 
     @media (max-width: 900px) and (pointer: coarse) {
       .kwyx-cells {
@@ -1241,14 +1262,14 @@
         html += "</tr>";
       });
 
-      html += "<tr><th>Zwischensumme (oben)</th>";
+      html += "<tr class=\"kniffel-subtotal\"><th>Zwischensumme (oben)</th>";
       totalsByPlayer.forEach(totals => {
         html += `<td class="kniffel-score-cell"><span class="kniffel-cell-text">${totals.upperSum}</span></td>`;
       });
       html += "</tr>";
 
       const anyBonusAchieved = totalsByPlayer.some(totals => totals.bonus > 0);
-      html += `<tr><th class="${anyBonusAchieved ? "bonus-achieved" : ""}">Bonus (ab 63)</th>`;
+      html += `<tr class="kniffel-subtotal"><th class="${anyBonusAchieved ? "bonus-achieved" : ""}">Bonus (ab 63)</th>`;
       totalsByPlayer.forEach(totals => {
         const cellClass = totals.bonus > 0 ? "bonus-achieved" : "";
         html += `<td class="kniffel-score-cell ${cellClass}"><span class="kniffel-cell-text">${totals.bonus}</span></td>`;
