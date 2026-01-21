@@ -112,7 +112,7 @@
     .kwyx-die.blue { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
     .kwyx-card { margin: 12px 0; text-align: left; }
     .kwyx-card-title { font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
+    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; box-sizing: border-box; }
     .kwyx-row-label { width: auto; min-width: 60px; font-weight: bold; white-space: nowrap; }
     .kwyx-row.red { background: #ffe5e5; }
     .kwyx-row.yellow { background: #fff9c4; }
@@ -127,7 +127,7 @@
     .kwyx-row.green .kwyx-cell { color: #2e7d32; }
     .kwyx-row.blue .kwyx-cell { color: #1565c0; }
     .kwyx-row.penalty { background: #f5f5f5; }
-    .kwyx-cells { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; flex: 1; min-width: 0; }
+    .kwyx-cells { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
     .kwyx-cell {
       width: clamp(26px, 3.6vw, 32px);
       height: clamp(26px, 3.6vw, 32px);
@@ -140,6 +140,9 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      padding: 0;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .kwyx-cell.lock { font-size: 12px; }
     .kwyx-cell.inactive { cursor: default; opacity: 0.5; }
@@ -173,16 +176,17 @@
       .code-input-row { flex-direction: column; }
       .lobby-item { flex-direction: column; align-items: flex-start; }
       .lobby-item button { width: 100%; }
-    }
-
-    @media (max-width: 600px) {
-      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: 1; padding: 6px; }
       .kwyx-row { flex-direction: column; align-items: stretch; padding: 4px; gap: 4px; }
       .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
       .kwyx-row.penalty { flex-direction: column; align-items: stretch; }
       .kwyx-row.penalty .kwyx-row-label { margin-bottom: 4px; }
-      .kwyx-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; overflow-x: visible; width: 100%; max-width: 100%; }
-      .kwyx-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; font-size: clamp(8px, 2.4vw, 10px); border-radius: 5px; }
+      .kwyx-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; overflow-x: hidden; width: 100%; max-width: 100%; }
+      .kwyx-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 5px; }
+    }
+
+    @media (max-width: 600px) {
+      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: 1; padding: 6px; }
+      .kwyx-cell { font-size: clamp(8px, 2.4vw, 10px); }
       .kwyx-cell.lock { font-size: 10px; }
       .kwyx-card { margin: 8px 0; }
       .card { font-size: 24px; }
