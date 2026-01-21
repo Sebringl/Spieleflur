@@ -85,7 +85,22 @@
     .score-table { border-collapse: collapse; margin: 10px auto; width: 100%; font-size: 0.8rem; }
     .score-table th, .score-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; background-color: white; }
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
-    .kniffel-select { width: min(360px, 92%); font-size: 16px; padding: 8px; margin: 6px auto; }
+    .kniffel-cell-button {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      font-size: 0.8rem;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .kniffel-cell-button.selectable:hover { background: #f3f3f3; }
+    .kniffel-cell-button.selected {
+      background: #eaffea;
+      box-shadow: inset 0 0 0 2px #2e7d32;
+      font-weight: bold;
+    }
+    .kniffel-cell-button:disabled { cursor: default; opacity: 0.6; }
     #kniffelView .die { font-size: clamp(56px, 14vw, 130px); line-height: clamp(56px, 14vw, 130px); }
     .card-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
     .card {
@@ -334,7 +349,6 @@
       <button id="kniffelEndTurnBtn">Kategorie sichern</button>
 
       <div id="kniffelThrowCount">Wurf: 0</div>
-      <select id="kniffelCategorySelect" class="kniffel-select"></select>
       <div id="kniffelResult"></div>
       <div id="kniffelScoreTable" style="margin-top: 14px;"></div>
     </div>
@@ -506,6 +520,8 @@
     let selectedHandIndex = null;
     let selectedTableIndex = null;
     let selectedSkatDiscards = [];
+    let kniffelSelectedCategory = "";
+    let lastKniffelPlayer = null;
     let lastSkatPhase = null;
     let kwyxSelections = { whiteRow: "", colorRow: "", colorSum: "", penalty: false };
     let lastKwyxThrowCount = null;
@@ -973,11 +989,12 @@
       historyContainer.innerHTML = html;
     }
 
-    function renderKniffelScoreTable() {
+    function renderKniffelScoreTable(myTurn) {
       if (!state || !state.scorecard) {
         document.getElementById("kniffelScoreTable").innerHTML = "";
         return;
       }
+      const canInteract = myTurn && !state.finished;
       let html = "<h3>Scorecard</h3><table class='score-table'>";
       html += "<tr><th>Kategorie</th>";
       state.players.forEach((name, i) => {
@@ -989,7 +1006,20 @@
         html += `<tr><td>${cat.label}</td>`;
         state.players.forEach((_, pIdx) => {
           const val = state.scorecard[pIdx]?.[cat.key];
-          html += `<td>${val === null || typeof val === "undefined" ? "-" : val}</td>`;
+          const isEmpty = val === null || typeof val === "undefined";
+          if (pIdx === mySeat && isEmpty) {
+            const isSelected = kniffelSelectedCategory === cat.key;
+            const label = isSelected ? "✓" : "-";
+            const classes = [
+              "kniffel-cell-button",
+              isSelected ? "selected" : "",
+              canInteract ? "selectable" : ""
+            ].filter(Boolean).join(" ");
+            const disabledAttr = canInteract ? "" : "disabled";
+            html += `<td><button type="button" class="${classes}" data-category="${cat.key}" ${disabledAttr}>${label}</button></td>`;
+          } else {
+            html += `<td>${isEmpty ? "-" : val}</td>`;
+          }
         });
         html += "</tr>";
       });
@@ -1000,30 +1030,30 @@
       });
       html += "</tr></table>";
       document.getElementById("kniffelScoreTable").innerHTML = html;
-    }
-
-    function renderKniffelCategorySelect(myTurn) {
-      const select = document.getElementById("kniffelCategorySelect");
-      if (!select || !state || !state.scorecard) return;
-      const card = state.scorecard[mySeat] || {};
-      select.innerHTML = "<option value=''>Kategorie wählen…</option>";
-      kniffelCategories.forEach(cat => {
-        const used = card && card[cat.key] !== null && typeof card[cat.key] !== "undefined";
-        const opt = document.createElement("option");
-        opt.value = cat.key;
-        opt.textContent = used ? `${cat.label} (belegt)` : cat.label;
-        opt.disabled = used;
-        select.appendChild(opt);
+      const buttons = document.querySelectorAll("#kniffelScoreTable .kniffel-cell-button[data-category]");
+      buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const category = btn.dataset.category || "";
+          if (!category) return;
+          if (kniffelSelectedCategory === category) {
+            kniffelSelectedCategory = "";
+          } else {
+            kniffelSelectedCategory = category;
+          }
+          renderKniffelScoreTable(isMyTurn());
+          updateKniffelEndButton();
+        });
       });
-      select.disabled = !myTurn;
     }
 
     function updateKniffelEndButton() {
       const endBtn = document.getElementById("kniffelEndTurnBtn");
-      const select = document.getElementById("kniffelCategorySelect");
-      if (!endBtn || !select || !state) return;
+      if (!endBtn || !state) return;
       const myTurn = isMyTurn();
-      endBtn.disabled = !myTurn || state.throwCount === 0 || state.dice.includes(null) || !select.value || state.finished;
+      const card = state.scorecard?.[mySeat] || {};
+      const categoryValue = card[kniffelSelectedCategory];
+      const categoryAvailable = !!kniffelSelectedCategory && (categoryValue === null || typeof categoryValue === "undefined");
+      endBtn.disabled = !myTurn || state.throwCount === 0 || state.dice.includes(null) || !categoryAvailable || state.finished;
     }
 
     // Baut die Kniffel-Ansicht aus dem aktuellen Spielzustand.
@@ -1046,6 +1076,14 @@
       document.body.style.backgroundColor = playerBgColors[colorIdx];
 
       const myTurn = isMyTurn();
+      if (!myTurn || state.currentPlayer !== lastKniffelPlayer) {
+        kniffelSelectedCategory = "";
+      }
+      lastKniffelPlayer = state.currentPlayer;
+      const myCard = state.scorecard?.[mySeat] || {};
+      if (kniffelSelectedCategory && (myCard[kniffelSelectedCategory] !== null && typeof myCard[kniffelSelectedCategory] !== "undefined")) {
+        kniffelSelectedCategory = "";
+      }
       renderDiceGroup({
         idPrefix: "kniffelDie",
         count: 5,
@@ -1061,7 +1099,6 @@
       rollBtn.textContent = allHeld ? "Alle Würfel gehalten" : `Würfeln (${remaining})`;
       rollBtn.disabled = !myTurn || allHeld || remaining <= 0 || state.finished;
 
-      renderKniffelCategorySelect(myTurn);
       updateKniffelEndButton();
 
       document.getElementById("turnHint").textContent = "";
@@ -1078,7 +1115,7 @@
       const msg = state.message || "";
       document.getElementById("kniffelResult").textContent = msg;
 
-      renderKniffelScoreTable();
+      renderKniffelScoreTable(myTurn);
     }
 
     // Berechnet Kwyx-Summen aus den weißen und farbigen Würfeln.
@@ -2148,7 +2185,7 @@
     document.getElementById("kniffelEndTurnBtn").onclick = () => {
       if (!room) return;
       if (!isKniffelGame()) return;
-      const category = document.getElementById("kniffelCategorySelect").value;
+      const category = kniffelSelectedCategory;
       socket.emit("action_end_turn", { code: room.code, category });
     };
 
@@ -2172,11 +2209,6 @@
       });
       resetKwyxSelections();
     };
-
-    document.getElementById("kniffelCategorySelect").onchange = () => {
-      updateKniffelEndButton();
-    };
-
 
     document.getElementById("schwimmenSwapBtn").onclick = () => {
       if (!room || !isSchwimmenGame()) return;
