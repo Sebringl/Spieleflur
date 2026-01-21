@@ -90,10 +90,13 @@
     #kniffelScoreTable .score-table td:first-child { width: clamp(120px, 22%, 180px); }
     #kniffelScoreTable .score-table th,
     #kniffelScoreTable .score-table td { vertical-align: middle; }
+    #kniffelScoreTable .score-table td.kniffel-score-cell { padding: 0; }
     .kniffel-cell-button {
-      display: block;
+      display: flex;
       width: 100%;
       height: 100%;
+      align-items: center;
+      justify-content: center;
       border: none;
       background: transparent;
       font-size: 0.8rem;
@@ -101,6 +104,17 @@
       cursor: pointer;
       line-height: 1.2;
       min-height: 28px;
+      box-sizing: border-box;
+    }
+    .kniffel-cell-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 4px 6px;
+      min-height: 28px;
+      line-height: 1.2;
       box-sizing: border-box;
     }
     .kniffel-cell-button.selectable:hover { background: #f3f3f3; }
@@ -226,7 +240,8 @@
       #kniffelScoreTable .score-table td { padding: 3px 4px; }
       #kniffelScoreTable .score-table th:first-child,
       #kniffelScoreTable .score-table td:first-child { width: 24%; }
-      #kniffelScoreTable .kniffel-cell-button { min-height: 24px; }
+      #kniffelScoreTable .kniffel-cell-button,
+      #kniffelScoreTable .kniffel-cell-text { min-height: 24px; }
       .kwyx-row { flex-direction: column; align-items: stretch; padding: 4px; gap: 4px; }
       .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
       .kwyx-row.penalty { flex-direction: column; align-items: stretch; }
@@ -1035,9 +1050,10 @@
               canInteract ? "selectable" : ""
             ].filter(Boolean).join(" ");
             const disabledAttr = canInteract ? "" : "disabled";
-            html += `<td><button type="button" class="${classes}" data-category="${cat.key}" ${disabledAttr}>${label}</button></td>`;
+            html += `<td class="kniffel-score-cell"><button type="button" class="${classes}" data-category="${cat.key}" ${disabledAttr}>${label}</button></td>`;
           } else {
-            html += `<td>${isEmpty ? "-" : val}</td>`;
+            const label = isEmpty ? "-" : val;
+            html += `<td class="kniffel-score-cell"><span class="kniffel-cell-text">${label}</span></td>`;
           }
         });
         html += "</tr>";
