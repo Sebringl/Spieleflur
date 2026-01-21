@@ -85,7 +85,13 @@
     .score-table { border-collapse: collapse; margin: 10px auto; width: 100%; font-size: 0.8rem; }
     .score-table th, .score-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; background-color: white; }
     .score-table th { background-color: #e0e0e0; font-weight: bold; }
+    #kniffelScoreTable .score-table { table-layout: fixed; }
+    #kniffelScoreTable .score-table th:first-child,
+    #kniffelScoreTable .score-table td:first-child { width: clamp(120px, 22%, 180px); }
+    #kniffelScoreTable .score-table th,
+    #kniffelScoreTable .score-table td { vertical-align: middle; }
     .kniffel-cell-button {
+      display: block;
       width: 100%;
       height: 100%;
       border: none;
@@ -93,6 +99,9 @@
       font-size: 0.8rem;
       padding: 4px 6px;
       cursor: pointer;
+      line-height: 1.2;
+      min-height: 28px;
+      box-sizing: border-box;
     }
     .kniffel-cell-button.selectable:hover { background: #f3f3f3; }
     .kniffel-cell-button.selected {
@@ -212,6 +221,12 @@
       .code-input-row { flex-direction: column; }
       .lobby-item { flex-direction: column; align-items: flex-start; }
       .lobby-item button { width: 100%; }
+      #kniffelScoreTable .score-table { min-width: 0; font-size: 0.7rem; }
+      #kniffelScoreTable .score-table th,
+      #kniffelScoreTable .score-table td { padding: 3px 4px; }
+      #kniffelScoreTable .score-table th:first-child,
+      #kniffelScoreTable .score-table td:first-child { width: 24%; }
+      #kniffelScoreTable .kniffel-cell-button { min-height: 24px; }
       .kwyx-row { flex-direction: column; align-items: stretch; padding: 4px; gap: 4px; }
       .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
       .kwyx-row.penalty { flex-direction: column; align-items: stretch; }
