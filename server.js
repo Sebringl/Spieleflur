@@ -32,14 +32,16 @@ const LOBBY_WARNING_MS = 30 * 1000;
 const rooms = new Map(); // code -> room
 const ROOMS_FILE = "./rooms.json";
 const CODE_LENGTH = 5;
+const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const DEFAULT_GAME_TYPE = "classic";
 const GAME_TYPES = new Set(["classic", "quick"]);
+const DEFAULT_ROOM_GAME_TYPE = "schocken";
+const ROOM_GAME_TYPES = new Set(["schocken", "kniffel", "schwimmen", "skat", "kwyx"]);
 
 // Erzeugt einen lesbaren Room-Code (ohne leicht verwechselbare Zeichen).
 function makeCode(len = CODE_LENGTH) {
-  const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   let s = "";
-  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < len; i++) s += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
   return s;
 }
 
@@ -50,9 +52,8 @@ function normalizeCode(value) {
 
 // Prüft, ob ein Code das erlaubte Alphabet und die Länge hat.
 function isValidCode(code, len = CODE_LENGTH) {
-  const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   if (!code || code.length !== len) return false;
-  return [...code].every(ch => alphabet.includes(ch));
+  return [...code].every(ch => CODE_ALPHABET.includes(ch));
 }
 // Zufälliges Token für Spielersitz/Host-Rechte.
 function makeToken() {
@@ -72,11 +73,7 @@ function normalizeGameType(value) {
 // Spieltyp für Rooms normalisieren (Schocken, Kniffel, Schwimmen, Skat, Kwyx).
 function normalizeRoomGameType(value) {
   const candidate = String(value || "").trim().toLowerCase();
-  if (candidate === "kniffel") return "kniffel";
-  if (candidate === "schwimmen") return "schwimmen";
-  if (candidate === "skat") return "skat";
-  if (candidate === "kwyx") return "kwyx";
-  return "schocken";
+  return ROOM_GAME_TYPES.has(candidate) ? candidate : DEFAULT_ROOM_GAME_TYPE;
 }
 
 // ---- Game State ----
