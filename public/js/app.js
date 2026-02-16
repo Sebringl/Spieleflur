@@ -2,6 +2,9 @@
     // Einstieg: Socket.IO-Verbindung zum Server.
     const socket = io();
 
+    const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+    const DEFAULT_GAME_TYPE = "schocken";
+
     // Darstellungen und Farbschemata für Würfel und Spieler.
     const diceSymbols = ['⚀','⚁','⚂','⚃','⚄','⚅'];
     const playerTextColors = ['#e6194b','#4363d8','#f58231','#911eb4','#008080','#f032e6','#bcf60c','#0082c8'];
@@ -88,7 +91,7 @@
     }
     // Name für jede Spielart (UI-Text).
     const gameTypeLabels = {
-      schocken: "Schocken",
+      [DEFAULT_GAME_TYPE]: "Schocken",
       kniffel: "Yahtzee",
       kwyx: "Kwyx",
       schwimmen: "Schwimmen",
@@ -139,9 +142,9 @@
       const logo = document.getElementById("pageTitleLogo");
       const titleText = document.getElementById("pageTitleText");
       if (!logo || !titleText) return;
-      const typeKey = view === "lobby" ? getSelectedGameType() : (room?.settings?.gameType || "schocken");
-      const gameTitle = gameTypeLabels[typeKey] || "Schocken";
-      const headerSrc = view === "lobby" ? headerImages.lobby : (headerImages[typeKey] || headerImages.schocken);
+      const typeKey = view === "lobby" ? getSelectedGameType() : (room?.settings?.gameType || DEFAULT_GAME_TYPE);
+      const gameTitle = gameTypeLabels[typeKey] || gameTypeLabels[DEFAULT_GAME_TYPE];
+      const headerSrc = view === "lobby" ? headerImages.lobby : (headerImages[typeKey] || headerImages[DEFAULT_GAME_TYPE]);
       logo.src = headerSrc;
       logo.alt = view === "lobby" ? "Spieleflur Lobby" : `${gameTitle} Header`;
       titleText.textContent = (view === "game" && room && room.code) ? `${gameTitle} (${room.code})` : `${gameTitle} (Lobby)`;
@@ -195,9 +198,8 @@
       el.style.color = isError ? "red" : "";
     }
     function makeCode(len = 5) {
-      const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
       let s = "";
-      for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+      for (let i = 0; i < len; i++) s += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
       return s;
     }
     function setSuggestedCode() {
@@ -220,11 +222,11 @@
     }
     // Spieltyp-Label und Anforderungen abfragen.
     function getGameTypeLabel(value) {
-      return gameTypeLabels[value] || "Schocken";
+      return gameTypeLabels[value] || gameTypeLabels[DEFAULT_GAME_TYPE];
     }
     function getSelectedGameType() {
       const select = document.getElementById("gameTypeSelect");
-      return select ? select.value : "schocken";
+      return select ? select.value : DEFAULT_GAME_TYPE;
     }
     function getGameTypeRequirement(value) {
       return gameTypeRequirements[value] || { min: 2 };
@@ -235,20 +237,24 @@
       return state && mySeat >= 0 && state.currentPlayer === mySeat;
     }
 
+    function isCurrentGameType(type) {
+      return room?.settings?.gameType === type;
+    }
+
     function isKniffelGame() {
-      return room && room.settings && room.settings.gameType === "kniffel";
+      return isCurrentGameType("kniffel");
     }
 
     function isKwyxGame() {
-      return room && room.settings && room.settings.gameType === "kwyx";
+      return isCurrentGameType("kwyx");
     }
 
     function isSchwimmenGame() {
-      return room && room.settings && room.settings.gameType === "schwimmen";
+      return isCurrentGameType("schwimmen");
     }
 
     function isSkatGame() {
-      return room && room.settings && room.settings.gameType === "skat";
+      return isCurrentGameType("skat");
     }
 
     // Liefert das passende Ergebnis-Element je Spieltyp.
