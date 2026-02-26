@@ -1023,6 +1023,12 @@
       if (handToggle.parentElement) handToggle.parentElement.style.display = isKniffel ? "flex" : "none";
     }
 
+    // Rückwärtskompatibler Alias: Spiele-Renderer rufen diese Funktion auf,
+    // um die sichtbaren Lobby-Optionen je Spieltyp zu aktualisieren.
+    function updateDeckelToggleState() {
+      updateLobbyOptionToggles();
+    }
+
     function getGameStartStatus() {
       const selectedType = room?.settings?.gameType
         || document.getElementById("gameTypeSelect")?.value
