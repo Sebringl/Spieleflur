@@ -1141,13 +1141,11 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-cell-hit {
   background: #ef4444;
   border-color: #dc2626;
-  color: #fff;
-  font-weight: 700;
 }
 
 .sv-cell-miss {
-  background: var(--color-surface-2);
-  color: var(--color-text-muted);
+  background: #9ca3af;
+  border-color: #6b7280;
 }
 
 .sv-cell-hover {
@@ -1191,7 +1189,7 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 /* Dunkelmodus-Anpassungen */
 body.dark-mode .sv-cell { background: #1e293b; border-color: #334155; }
 body.dark-mode .sv-cell-ship { background: #1d4ed8; border-color: #2563eb; }
-body.dark-mode .sv-cell-miss { background: #1e293b; color: #64748b; }
+body.dark-mode .sv-cell-miss { background: #475569; border-color: #334155; }
 body.dark-mode .sv-ship-item { background: #1a1916; border-color: #334155; }
 body.dark-mode .sv-ship-item:hover:not(.sv-ship-placed),
 body.dark-mode .sv-ship-item.sv-ship-selected {

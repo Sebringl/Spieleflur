@@ -181,6 +181,7 @@ function svClearHover() {
 function svOnSetupClick(row, col) {
   if (svSelectedShipIndex === null) return;
   if (!room) return;
+  const justPlacedIndex = svSelectedShipIndex;
   socket.emit("sv_place_ship", {
     code: room.code,
     shipIndex: svSelectedShipIndex,
@@ -190,6 +191,19 @@ function svOnSetupClick(row, col) {
   });
   svSelectedShipIndex = null;
   svHoverCells = [];
+
+  // Nächstes unplatziertes Schiff automatisch auswählen
+  const myBoard = svGetMyBoard();
+  if (myBoard) {
+    for (let i = 0; i < SV_SHIP_SIZES.length; i++) {
+      if (i === justPlacedIndex) continue;
+      const ship = myBoard.ships[i];
+      if (ship && ship.cells.length === 0) {
+        svSelectedShipIndex = i;
+        break;
+      }
+    }
+  }
 }
 
 // ---- Spielphase ----
@@ -219,10 +233,8 @@ function renderSvGridReadonly(containerId, grid, showShips) {
 
       if (val === "hit") {
         cell.classList.add("sv-cell-hit");
-        cell.textContent = "✕";
       } else if (val === "miss") {
         cell.classList.add("sv-cell-miss");
-        cell.textContent = "•";
       } else if (val === "ship" && showShips) {
         cell.classList.add("sv-cell-ship");
       }
@@ -246,20 +258,17 @@ function renderSvEnemyGrid(containerId, grid) {
 
       if (val === "hit") {
         cell.classList.add("sv-cell-hit");
-        cell.textContent = "✕";
       } else if (val === "miss") {
         cell.classList.add("sv-cell-miss");
-        cell.textContent = "•";
       } else if (val === "ship") {
         // Gegnerische Schiffe nicht anzeigen (nur nach Spielende)
         if (state.phase === "finished") {
           cell.classList.add("sv-cell-ship-hidden");
-          cell.textContent = "▪";
         }
       }
 
-      // Klickbar wenn am Zug und Feld noch nicht beschossen
-      if (isMyTurnNow && !val) {
+      // Klickbar wenn am Zug und Feld noch nicht beschossen (weder Treffer noch Wasser)
+      if (isMyTurnNow && val !== "hit" && val !== "miss") {
         cell.classList.add("sv-cell-shootable");
         cell.addEventListener("click", () => {
           if (!room) return;
