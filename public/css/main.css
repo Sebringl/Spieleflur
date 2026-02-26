@@ -976,6 +976,7 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   .code-input-row { flex-direction: column; }
   .lobby-item { flex-direction: column; align-items: flex-start; }
   .lobby-item button { width: 100%; }
+  #lobbyCard { padding: 16px; }
   #kniffelScoreTable .score-table { min-width: 0; font-size: 0.72rem; }
   #kniffelScoreTable .score-table th,
   #kniffelScoreTable .score-table td { padding: 3px 4px; }
@@ -1004,16 +1005,29 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
     min-height: 0;
   }
   .card-actions { gap: 6px; }
+
+  /* Schiffe versenken: Spielfelder übereinander auf mobilen Geräten */
+  .sv-boards { flex-direction: column; align-items: center; }
+  .sv-grid { width: min(360px, 92vw); height: min(360px, 92vw); }
+  .sv-setup-controls { justify-content: center; }
+  .sv-ship-list { width: 100%; max-width: 360px; }
+  .sv-setup-done { align-items: center; }
 }
 
 @media (max-width: 600px) {
   .kwyx-die { font-size: clamp(44px, 11vw, 80px); line-height: 1; padding: 6px; }
+  /* Kwyx-Würfel auf sehr kleinen Bildschirmen umbrechen lassen */
+  .kwyx-dice-container { flex-wrap: wrap; gap: 8px; }
   .kwyx-cell { font-size: clamp(14px, 4.8vw, 18px); }
   .kwyx-cell.lock { font-size: clamp(14px, 4.8vw, 18px); }
   .kwyx-card { margin: 8px 0; }
   .card { font-size: 1.3rem; }
   .card-row { gap: 6px; }
   .codeBig { font-size: 1.6rem; letter-spacing: 0.12em; }
+
+  /* Theme-Toggle auf sehr kleinen Bildschirmen kompakter */
+  .theme-toggle label { display: none; }
+  .theme-toggle { padding: 7px 10px; }
 }
 
 /* ============================================================
