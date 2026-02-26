@@ -168,7 +168,7 @@ function renderSchwimmenGame() {
       }
 
       document.getElementById("turnHint").textContent = "";
-      document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
+      document.getElementById("backToLobbyWrap").style.display = canShowBackToLobby() ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
 

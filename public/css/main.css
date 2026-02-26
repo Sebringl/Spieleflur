@@ -12,11 +12,11 @@
   --color-surface:   #ffffff;
   --color-surface-2: #f8f7f4;
   --color-border:    #e2e0da;
-  --color-border-focus: #6366f1;
+  --color-border-focus: #4b5563;
   --color-text:      #1a1917;
   --color-text-muted: #6b6962;
-  --color-accent:    #6366f1;
-  --color-accent-hover: #4f46e5;
+  --color-accent:    #374151;
+  --color-accent-hover: #1f2937;
   --color-accent-text: #ffffff;
   --color-success:   #22c55e;
   --color-success-bg: #f0fdf4;
@@ -55,11 +55,11 @@ body.dark-mode {
   --color-surface:   #1a1916;
   --color-surface-2: #211f1c;
   --color-border:    #2d2c28;
-  --color-border-focus: #818cf8;
+  --color-border-focus: #9ca3af;
   --color-text:      #f0ede8;
   --color-text-muted: #8a877f;
-  --color-accent:    #818cf8;
-  --color-accent-hover: #6366f1;
+  --color-accent:    #4b5563;
+  --color-accent-hover: #374151;
   --color-accent-text: #ffffff;
   --color-success:   #4ade80;
   --color-success-bg: #052e16;
@@ -160,14 +160,14 @@ button:disabled {
 
 /* Sekundärer Button (outline) */
 button.btn-secondary {
-  background-color: transparent;
+  background-color: var(--color-surface-2);
   color: var(--color-text);
-  border-color: var(--color-border);
-  box-shadow: none;
+  border-color: #9ca3af;
+  box-shadow: var(--shadow-xs);
 }
 button.btn-secondary:hover {
-  background-color: var(--color-surface-2);
-  border-color: var(--color-text-muted);
+  background-color: #d1d5db;
+  border-color: #6b7280;
 }
 
 /* Danger-Button */
