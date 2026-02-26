@@ -12,9 +12,12 @@
   <link rel="stylesheet" href="/css/main.css" />
 </head>
 <body>
-  <div class="theme-toggle" role="group" aria-label="Darstellung umschalten">
-    <label for="themeToggle">Dunkelmodus</label>
-    <input type="checkbox" id="themeToggle" />
+  <div class="top-controls" role="group" aria-label="Schnellaktionen">
+    <button id="btnReload" class="reload-toggle" title="Neu laden" aria-label="Neu laden">🔄</button>
+    <div class="theme-toggle" role="group" aria-label="Darstellung umschalten">
+      <label for="themeToggle">Dunkelmodus</label>
+      <input type="checkbox" id="themeToggle" />
+    </div>
   </div>
 
   <!-- Seitenkopf mit dynamischem Logo je Spieltyp -->
@@ -106,9 +109,6 @@
 
   <!-- Spiel-Ansicht: je nach Spieltyp werden unterschiedliche Bereiche sichtbar -->
   <div id="game" style="display:none;">
-    <div class="refresh-row">
-      <button id="btnReload" class="icon-btn" title="Neu laden" aria-label="Neu laden">🔄</button>
-    </div>
     <h2 id="playerDisplay">Am Zug: -</h2>
     <div class="small muted" id="turnHint"></div>
 

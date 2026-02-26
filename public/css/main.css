@@ -252,13 +252,21 @@ hr {
 }
 
 /* ============================================================
-   THEME TOGGLE
+   TOP CONTROLS (Reload + Theme Toggle)
    ============================================================ */
 
-.theme-toggle {
+.top-controls {
   position: fixed;
   top: 14px;
   right: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reload-toggle,
+.theme-toggle {
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -278,8 +286,16 @@ hr {
     box-shadow var(--transition-base);
 }
 
+.reload-toggle:hover,
 .theme-toggle:hover {
   box-shadow: var(--shadow-lg);
+}
+
+.reload-toggle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1;
 }
 
 /* Moderner Toggle-Switch */
@@ -480,9 +496,6 @@ body.dark-mode #lobbyExpiryNotice {
   padding: 14px;
   background: var(--color-surface-2);
 }
-
-/* Refresh-Reihe im Spiel */
-.refresh-row { margin: 0 0 12px; }
 
 /* ============================================================
    SPIELER-ANZEIGE & HINWEISE
@@ -1028,8 +1041,10 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   .card-row { gap: 6px; }
   .codeBig { font-size: 1.6rem; letter-spacing: 0.12em; }
 
-  /* Theme-Toggle auf sehr kleinen Bildschirmen kompakter */
+  /* Top-Controls auf sehr kleinen Bildschirmen kompakter */
+  .top-controls { gap: 6px; }
   .theme-toggle label { display: none; }
+  .reload-toggle,
   .theme-toggle { padding: 7px 10px; }
 }
 
