@@ -11,6 +11,6 @@ export const DEFAULT_GAME_TYPE = "classic";
 export const GAME_TYPES = new Set(["classic", "quick"]);
 
 export const DEFAULT_ROOM_GAME_TYPE = "schocken";
-export const ROOM_GAME_TYPES = new Set(["schocken", "kniffel", "schwimmen", "skat", "kwyx"]);
+export const ROOM_GAME_TYPES = new Set(["schocken", "kniffel", "schwimmen", "skat", "kwyx", "schiffeversenken"]);
 
 export const PORT = process.env.PORT || 3000;

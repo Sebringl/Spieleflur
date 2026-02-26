@@ -1,0 +1,105 @@
+// Spiellogik für Schiffe versenken (Battleship) – genau 2 Spieler.
+
+// Schiffsgrößen: 1x Schlachtschiff (4), 2x Kreuzer (3), 3x Zerstörer (2)
+export const SV_SHIP_SIZES = [4, 3, 3, 2, 2, 2];
+export const SV_TOTAL_HEALTH = SV_SHIP_SIZES.reduce((a, b) => a + b, 0); // 16
+
+function createEmptyGrid() {
+  return Array(10).fill(null).map(() => Array(10).fill(null));
+}
+
+function createBoard() {
+  return {
+    // null = leer, "ship" = Schiff, "hit" = Treffer, "miss" = Wasser
+    grid: createEmptyGrid(),
+    ships: SV_SHIP_SIZES.map(length => ({ length, cells: [], sunk: false })),
+    shipsPlaced: 0,
+    health: SV_TOTAL_HEALTH
+  };
+}
+
+export function createSchiffeversenkenState(playerNames) {
+  return {
+    gameType: "schiffeversenken",
+    players: playerNames,
+    // "setup" -> "playing" -> "finished"
+    phase: "setup",
+    boards: [createBoard(), createBoard()],
+    setupComplete: [false, false],
+    currentPlayer: 0, // Wer gerade schießt (wird im Setup auch genutzt für canAct-Kompatibilität)
+    winner: null,
+    lastShot: null,
+    lastResult: null, // "hit" | "sunk" | "miss"
+    message: `Beide Spieler platzieren ihre Schiffe.`
+  };
+}
+
+// Prüft, ob ein Schiff an dieser Position platziert werden kann.
+export function canPlaceShip(grid, length, row, col, isVertical) {
+  for (let i = 0; i < length; i++) {
+    const r = isVertical ? row + i : row;
+    const c = isVertical ? col : col + i;
+    if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
+    if (grid[r][c] !== null) return false;
+  }
+  return true;
+}
+
+// Platziert ein Schiff auf dem Board.
+// Gibt false zurück, wenn das Schiff bereits platziert ist oder die Position ungültig ist.
+export function placeShip(board, shipIndex, row, col, isVertical) {
+  const ship = board.ships[shipIndex];
+  if (!ship) return false;
+  if (ship.cells.length > 0) return false; // bereits platziert
+
+  if (!canPlaceShip(board.grid, ship.length, row, col, isVertical)) return false;
+
+  const cells = [];
+  for (let i = 0; i < ship.length; i++) {
+    const r = isVertical ? row + i : row;
+    const c = isVertical ? col : col + i;
+    cells.push({ row: r, col: c });
+    board.grid[r][c] = "ship";
+  }
+  ship.cells = cells;
+  board.shipsPlaced++;
+  return true;
+}
+
+// Verarbeitet einen Schuss auf das Ziel-Board.
+export function recordShot(board, row, col) {
+  const cell = board.grid[row][col];
+  if (cell === "hit" || cell === "miss") {
+    return { valid: false };
+  }
+
+  if (cell === "ship") {
+    board.grid[row][col] = "hit";
+    board.health--;
+
+    // Prüfen ob ein Schiff versenkt wurde
+    for (const ship of board.ships) {
+      if (ship.sunk) continue;
+      const allHit = ship.cells.every(({ row: r, col: c }) => board.grid[r][c] === "hit");
+      if (allHit) {
+        ship.sunk = true;
+        return { valid: true, hit: true, sunk: true };
+      }
+    }
+    return { valid: true, hit: true, sunk: false };
+  }
+
+  // Wasser
+  board.grid[row][col] = "miss";
+  return { valid: true, hit: false, sunk: false };
+}
+
+export function isGameOver(boards) {
+  return boards.some(b => b.health === 0);
+}
+
+export function getWinnerIndex(boards) {
+  if (boards[0].health === 0) return 1;
+  if (boards[1].health === 0) return 0;
+  return -1;
+}

@@ -35,6 +35,7 @@
           <option value="kwyx">Kwyx</option>
           <option value="schwimmen">Schwimmen</option>
           <option value="skat">Skat</option>
+          <option value="schiffeversenken">Schiffe versenken</option>
         </select>
         <label class="deckel-inline" for="deckelToggle">
           <input type="checkbox" id="deckelToggle" />
@@ -205,6 +206,36 @@
       <div id="schwimmenScores" style="margin-top: 14px;"></div>
     </div>
 
+    <!-- Schiffe versenken-Ansicht -->
+    <div id="schiffeversenkenView" style="display:none;">
+      <div id="svMessage" class="sv-message"></div>
+      <div id="svSetupArea" style="display:none;">
+        <div class="sv-setup-controls">
+          <div id="svShipList" class="sv-ship-list"></div>
+          <div class="sv-setup-grid-wrap">
+            <div class="sv-grid-label">Dein Spielfeld</div>
+            <div id="svSetupGrid" class="sv-grid"></div>
+          </div>
+          <div class="sv-setup-hint">Klicke auf ein Schiff, dann auf das Gitter um es zu platzieren.<br/>
+            <button id="svRotateBtn" class="btn-secondary sv-rotate-btn">Drehen (↔/↕)</button>
+          </div>
+        </div>
+      </div>
+      <div id="svPlayArea" style="display:none;">
+        <div class="sv-boards">
+          <div class="sv-board-wrap">
+            <div class="sv-grid-label">Dein Spielfeld</div>
+            <div id="svMyGrid" class="sv-grid sv-grid-own"></div>
+          </div>
+          <div class="sv-board-wrap">
+            <div class="sv-grid-label">Gegner</div>
+            <div id="svEnemyGrid" class="sv-grid sv-grid-enemy"></div>
+          </div>
+        </div>
+      </div>
+      <div id="svResult" style="margin-top: 10px;"></div>
+    </div>
+
     <!-- Skat-Ansicht -->
     <div id="skatView" style="display:none;">
       <div class="small muted">Skat (3 Spieler)</div>
@@ -237,6 +268,7 @@
   <script src="/js/games/schwimmen.js"></script>
   <script src="/js/games/skat.js"></script>
   <script src="/js/games/schocken.js"></script>
+  <script src="/js/games/schiffeversenken.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

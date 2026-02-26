@@ -1017,6 +1017,188 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 }
 
 /* ============================================================
+   SCHIFFE VERSENKEN
+   ============================================================ */
+
+.sv-message {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 8px 0 14px;
+  color: var(--color-text);
+  min-height: 1.4em;
+}
+
+/* Setup-Phase */
+.sv-setup-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.sv-ship-list { min-width: 180px; }
+.sv-ship-list h4 { margin: 0 0 8px; font-size: 0.9rem; color: var(--color-text-muted); }
+
+.sv-ships {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sv-ship-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-surface);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  user-select: none;
+}
+
+.sv-ship-item:hover:not(.sv-ship-placed) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-2);
+}
+
+.sv-ship-item.sv-ship-selected {
+  border-color: var(--color-accent);
+  background: var(--color-surface-2);
+  box-shadow: 0 0 0 3px rgba(55,65,81,0.15);
+}
+
+.sv-ship-item.sv-ship-placed {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sv-ship-cells {
+  font-size: 1.1rem;
+  letter-spacing: 2px;
+  color: #1e40af;
+}
+
+.sv-ship-status { color: var(--color-success); font-weight: 700; margin-left: auto; }
+.sv-ship-name { font-size: 0.82rem; color: var(--color-text-muted); }
+
+.sv-setup-grid-wrap { display: flex; flex-direction: column; gap: 6px; }
+.sv-grid-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sv-rotate-btn { margin-top: 8px; }
+.sv-setup-hint { font-size: 0.82rem; color: var(--color-text-muted); max-width: 200px; }
+
+.sv-setup-done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sv-setup-done p {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-success);
+  margin: 0;
+}
+
+/* Spielfeld-Gitter */
+.sv-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  width: min(300px, 90vw);
+  height: min(300px, 90vw);
+}
+
+.sv-cell {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(8px, 2.5vw, 14px);
+  cursor: default;
+  transition: background var(--transition-fast);
+  aspect-ratio: 1;
+}
+
+.sv-cell-ship {
+  background: #3b82f6;
+  border-color: #2563eb;
+}
+
+.sv-cell-hit {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #fff;
+  font-weight: 700;
+}
+
+.sv-cell-miss {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+
+.sv-cell-hover {
+  background: rgba(59, 130, 246, 0.4);
+  border-color: #3b82f6;
+}
+
+.sv-cell-shootable {
+  cursor: crosshair;
+}
+
+.sv-cell-aim {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+}
+
+.sv-cell-ship-hidden {
+  background: rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+  font-size: 0.7em;
+}
+
+/* Spielphase: zwei Gitter nebeneinander */
+.sv-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: center;
+}
+
+.sv-board-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.sv-grid-own { opacity: 1; }
+.sv-grid-enemy { }
+
+/* Dunkelmodus-Anpassungen */
+body.dark-mode .sv-cell { background: #1e293b; border-color: #334155; }
+body.dark-mode .sv-cell-ship { background: #1d4ed8; border-color: #2563eb; }
+body.dark-mode .sv-cell-miss { background: #1e293b; color: #64748b; }
+body.dark-mode .sv-ship-item { background: #1a1916; border-color: #334155; }
+body.dark-mode .sv-ship-item:hover:not(.sv-ship-placed),
+body.dark-mode .sv-ship-item.sv-ship-selected {
+  background: #262620;
+}
+
+/* ============================================================
    ANIMATIONEN
    ============================================================ */
 
