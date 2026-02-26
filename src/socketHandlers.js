@@ -254,7 +254,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       if (room.settings.gameType === "schiffeversenken" && room.players.length !== 2) {
         return socket.emit("error_msg", { message: "Schiffe versenken benötigt genau 2 Spieler." });
       }
-      if (room.players.length < 2) return socket.emit("error_msg", { message: "Mindestens 2 Spieler nötig." });
+      if (room.players.length < 2 && room.settings.gameType !== "kniffel") return socket.emit("error_msg", { message: "Mindestens 2 Spieler nötig." });
       startNewGame(room);
       room.lobbyWarnedAt = null;
       io.to(room.code).emit("room_update", safeRoom(room));
