@@ -7,374 +7,16 @@
   <link rel="manifest" href="/manifest.json" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    /* Basis-Layout und UI-Elemente (Lobby + Spielansichten). */
-    html { font-size: 18px; }
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: clamp(12px, 2vw, 24px);
-      max-width: 960px;
-      margin: auto;
-      background-color: var(--page-bg, #ffffff);
-      color: var(--page-text, #111111);
-      transition: background-color 0.2s ease, color 0.2s ease;
-    }
-    .dice-container { display: flex; justify-content: center; gap: 14px; margin: 16px 0; flex-wrap: wrap; }
-    .kwyx-dice-container { flex-wrap: nowrap; }
-    .die {
-      font-size: clamp(56px, 12vw, 140px);
-      line-height: 1;
-      font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
-      cursor: pointer;
-      padding: 10px;
-      border: 2px solid transparent;
-      border-radius: 10px;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.2em;
-      height: 1.2em;
-      box-sizing: border-box;
-    }
-    .die.inactive { color: #9a9a9a; cursor: default; }
-    .held { border-color: green; background-color: #eaffea; }
-    button { margin: 8px; font-size: 20px; padding: 12px 18px; max-width: 100%; }
-    input { font-size: 18px; padding: 10px; margin: 6px; width: min(320px, 90%); }
-    #result, #throwCount, #playerDisplay { font-size: 18px; margin-top: 10px; transition: color 0.2s ease; }
-    #historyTable table { border-collapse: collapse; margin: auto; width: 100%; font-size: 0.9rem; }
-    #historyTable th, #historyTable td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; background-color: white; }
-    #historyTable th { background-color: #e0e0e0; font-weight: bold; }
-    .winner { background-color: #fff9c4; }
-    #lobbyCard { border: 1px solid #ddd; border-radius: 12px; padding: 16px; text-align: left; }
-    .small { font-size: 14px; opacity: 0.85; }
-    .codeBig { font-size: 28px; letter-spacing: 3px; font-weight: 800; text-align: center; margin: 10px 0; }
-    .playerList { text-align: left; max-width: 420px; margin: 0 auto; }
-    .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 13px; margin-left: 8px; }
-    .ok { background: #eaffea; }
-    .bad { background: #ffe5e5; }
-    .neutral { background: #f0f0f0; }
-    .toggle-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; padding: 10px 12px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
-    .toggle-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
-    .toggle-row select { font-size: 16px; padding: 6px 8px; }
-    .deckel-inline { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-    .code-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
-    .code-input-row input { flex: 0 0 min(320px, 90%); margin: 6px 0; }
-    .text-input { width: min(320px, 90%); }
-    .icon-btn { border-radius: 10px; margin: 6px 0; }
-    .icon-btn span { display: inline-block; transform: rotate(0deg); }
-    .refresh-row { margin: 8px 0 12px; }
-    .lobby-list { text-align: left; max-width: 420px; margin: 10px auto; }
-    .lobby-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #eee; border-radius: 10px; padding: 10px; margin: 8px 0; }
-    .lobby-item button { margin: 0; }
-    .muted { opacity: 0.7; }
-    .centered { display: block; margin-left: auto; margin-right: auto; }
-    .page-title { margin: 0 0 16px; }
-    .page-title-logo { max-width: min(480px, 90%); height: auto; display: inline-block; }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-    footer { margin-top: 24px; font-size: 14px; color: #555; }
-    .impressum-link { display: inline-block; margin-top: 20px; font-size: 14px; color: #555; }
-    .score-table { border-collapse: collapse; margin: 10px auto; width: 100%; font-size: 0.8rem; }
-    .score-table th, .score-table td { border: 1px solid #ccc; padding: 0px 0px; text-align: center; background-color: white; }
-    .score-table th { background-color: #e0e0e0; font-weight: bold; }
-    #kniffelScoreTable .score-table { table-layout: fixed; }
-    #kniffelScoreTable .score-table th:first-child,
-    #kniffelScoreTable .score-table td:first-child { width: clamp(120px, 22%, 180px); }
-    #kniffelScoreTable .score-table th:first-child,
-    #kniffelScoreTable .score-table td:first-child {
-      position: sticky;
-      left: 0;
-      z-index: 2;
-      background-color: white;
-      box-shadow: 2px 0 0 rgba(0, 0, 0, 0.05);
-    }
-    #kniffelScoreTable .score-table th:first-child { background-color: #e0e0e0; z-index: 3; }
-    #kniffelScoreTable .score-table th,
-    #kniffelScoreTable .score-table td { vertical-align: middle; }
-    #kniffelScoreTable .score-table td.kniffel-score-cell { padding: 0; }
-    #kniffelScoreTable .score-table .bonus-achieved { font-weight: bold; color: #2e7d32; }
-    #kniffelScoreTable .score-table tr.kniffel-subtotal th,
-    #kniffelScoreTable .score-table tr.kniffel-subtotal td { background-color: #f2f2f2; }
-    .score-table {
-      border-collapse: collapse; /* Entfernt Lücken zwischen den Zellen */
-      width: 100%;
-      table-layout: fixed;      /* Sorgt für gleichmäßige Spaltenbreiten */
-    }
-    .kniffel-cell-button {
-      display: block;
-      width: 100%;
-      height: 100%;
-      align-items: center;
-      justify-content: center;
-      border: none;
-      background: white;
-      font-size: 0.8rem;
-      padding: 8px 4px;
-      margin: 0;
-      cursor: pointer;
-      line-height: 1.2;
-      min-height: 40px;
-      box-sizing: border-box;
-      appearance: none;
-      -webkit-appearance: none;
-
-    }
-    .kniffel-cell-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      padding: 0px;
-      margin: 0;
-      min-height: 40px;
-      line-height: 1.2;
-      box-sizing: border-box;
-    }
-    .kniffel-cell-button.selectable:hover { background: #f3f3f3; }
-    .kniffel-cell-button.selected {
-      background: #c8e6c9;
-      border: 2px solid #2e7d32;
-      font-weight: bold;
-    }
-    .kniffel-cell-button:disabled { cursor: default; opacity: 0.6; }
-    #kniffelView .die { font-size: clamp(56px, 14vw, 130px); line-height: clamp(56px, 14vw, 130px); }
-    .card-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
-    .card {
-      width: clamp(70px, 18vw, 90px);
-      height: clamp(95px, 24vw, 130px);
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      background: #fff;
-      cursor: pointer;
-      user-select: none;
-    }
-    .card.inactive { cursor: default; opacity: 0.6; }
-    .card.selected { border-color: #2e7d32; box-shadow: 0 0 0 2px #a5d6a7; }
-    .card.red { color: #c62828; }
-    .card-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    .kwyx-die.white { background: #f5f5f5; border-color: #ccc; }
-    .kwyx-die.red { background: #ffe5e5; border-color: #c62828; color: #c62828; }
-    .kwyx-die.yellow { background: #fff9c4; border-color: #f9a825; color: #f57f17; }
-    .kwyx-die.green { background: #e8f5e9; border-color: #2e7d32; color: #2e7d32; }
-    .kwyx-die.blue { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
-    .kwyx-card { margin: 12px 0; text-align: left; }
-    .kwyx-card-title { font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .kwyx-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; margin-bottom: 8px; flex-wrap: nowrap; box-sizing: border-box; }
-    .kwyx-row-label { width: auto; min-width: 60px; font-weight: bold; white-space: nowrap; }
-    .kwyx-row.red { background: #ffe5e5; }
-    .kwyx-row.yellow { background: #fff9c4; }
-    .kwyx-row.green { background: #e8f5e9; }
-    .kwyx-row.blue { background: #e3f2fd; }
-    .kwyx-row.highlight-red { box-shadow: inset 0 0 0 2px #c62828; }
-    .kwyx-row.highlight-yellow { box-shadow: inset 0 0 0 2px #f57f17; }
-    .kwyx-row.highlight-green { box-shadow: inset 0 0 0 2px #2e7d32; }
-    .kwyx-row.highlight-blue { box-shadow: inset 0 0 0 2px #1565c0; }
-    .kwyx-row.red .kwyx-cell { color: #c62828; }
-    .kwyx-row.yellow .kwyx-cell { color: #f57f17; }
-    .kwyx-row.green .kwyx-cell { color: #2e7d32; }
-    .kwyx-row.blue .kwyx-cell { color: #1565c0; }
-    .kwyx-row.penalty { background: #f5f5f5; }
-    .kwyx-cells { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
-    .kwyx-cell {
-      width: clamp(30px, 4vw, 40px);
-      height: clamp(30px, 4vw, 40px);
-      border-radius: 6px;
-      border: 1px solid #d0d0d0;
-      background: #fff;
-      font-size: clamp(14px, 2vw, 16px);
-      font-weight: bold;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-    .kwyx-cell.lock { font-size: clamp(14px, 2vw, 16px); }
-    .kwyx-cell.inactive { cursor: default; opacity: 0.5; }
-    .kwyx-cell.marked { background: #c8e6c9; border-color: #2e7d32; }
-    .kwyx-cell.locked { background: #ffe0b2; border-color: #ef6c00; }
-    .kwyx-cell.selected-white { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #9e9e9e; }
-    .kwyx-cell.selected-color-red { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #c62828; }
-    .kwyx-cell.selected-color-yellow { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #f57f17; }
-    .kwyx-cell.selected-color-green { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #2e7d32; }
-    .kwyx-cell.selected-color-blue { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #1565c0; }
-    .kwyx-cell.selected-penalty { box-shadow: 0 0 0 3px rgba(250, 250, 250, 0.7), 0 0 0 5px #616161; }
-    .kwyx-cell.selectable-white { border-color: #9e9e9e; }
-    .kwyx-cell.selectable-color { border-color: #1976d2; }
-    .kwyx-points { margin-top: 12px; }
-    .kwyx-points table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-    .kwyx-points th, .kwyx-points td { border: 1px solid #ddd; padding: 4px 6px; text-align: center; }
-    .kwyx-points th { background: #f1f1f1; }
-    .kwyx-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 12px; }
-    .kwyx-actions .kwyx-action-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-
-    #historyTable, #kniffelScoreTable, .kwyx-points { overflow-x: auto; }
-    #historyTable table, .score-table, .kwyx-points table { min-width: 520px; }
-    .theme-toggle {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid #ddd;
-      background: #ffffff;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      font-size: 0.8rem;
-    }
-    .theme-toggle input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
-
-    body.dark-mode {
-      --page-bg: #121212;
-      --page-text: #f2f2f2;
-    }
-    body.dark-mode .held { background-color: #1f3a22; border-color: #5bbf6a; }
-    body.dark-mode #historyTable th,
-    body.dark-mode #historyTable td,
-    body.dark-mode .score-table th,
-    body.dark-mode .score-table td,
-    body.dark-mode .kwyx-points th,
-    body.dark-mode .kwyx-points td {
-      background-color: #1e1e1e;
-      border-color: #444;
-      color: #f2f2f2;
-    }
-    body.dark-mode .score-table th { background-color: #2a2a2a; }
-    body.dark-mode #kniffelScoreTable .score-table th:first-child,
-    body.dark-mode #kniffelScoreTable .score-table td:first-child { background-color: #1e1e1e; }
-    body.dark-mode #kniffelScoreTable .score-table th:first-child { background-color: #2a2a2a; }
-    body.dark-mode .kniffel-cell-button,
-    body.dark-mode .kniffel-cell-text { background: #1e1e1e; color: #f2f2f2; }
-    body.dark-mode .kniffel-cell-button.selectable:hover { background: #2a2a2a; }
-    body.dark-mode .kniffel-cell-button.selected { background: #2f5f34; border-color: #5bbf6a; }
-    body.dark-mode .card { background: #1e1e1e; border-color: #444; }
-    body.dark-mode .kwyx-cell { background: #1e1e1e; border-color: #444; }
-    body.dark-mode .toggle-row { background: #1a1a1a; border-color: #333; }
-    body.dark-mode .pill { border-color: #444; }
-    body.dark-mode button { background: #1f1f1f; color: #f2f2f2; border: 1px solid #444; }
-    body.dark-mode input,
-    body.dark-mode select {
-      background: #1f1f1f;
-      color: #f2f2f2;
-      border: 1px solid #444;
-    }
-    body.dark-mode #lobbyCard { background: #1a1a1a; border-color: #333; }
-    body.dark-mode footer,
-    body.dark-mode .impressum-link { color: #aaa; }
-    body.dark-mode .theme-toggle { background: #1a1a1a; border-color: #444; color: #f2f2f2; }
-    body.dark-mode #kniffelScoreTable .score-table .bonus-achieved { color: #8bd68f; }
-    body.dark-mode #kniffelScoreTable .score-table tr.kniffel-subtotal th,
-    body.dark-mode #kniffelScoreTable .score-table tr.kniffel-subtotal td { background-color: #2a2a2a; }
-    body.dark-mode .pill.ok { background: #1f3a22; color: #c8e6c9; border-color: #2f5f34; }
-    body.dark-mode .pill.bad { background: #3b1f1f; color: #f4c7c3; border-color: #6a2c2c; }
-    body.dark-mode .pill.neutral { background: #2a2a2a; color: #d0d0d0; border-color: #444; }
-    body.dark-mode .kwyx-die.white { background: #2a2a2a; border-color: #555; color: #f2f2f2; }
-    body.dark-mode .kwyx-die.red { background: #3b1f1f; border-color: #6a2c2c; color: #f4c7c3; }
-    body.dark-mode .kwyx-die.yellow { background: #3a3320; border-color: #7a5c1a; color: #f0e1a8; }
-    body.dark-mode .kwyx-die.green { background: #1f3a22; border-color: #2f5f34; color: #c8e6c9; }
-    body.dark-mode .kwyx-die.blue { background: #1f2a3b; border-color: #2b4c7a; color: #c3d7f5; }
-    body.dark-mode .kwyx-row.red { background: #2f1a1a; }
-    body.dark-mode .kwyx-row.yellow { background: #2f2918; }
-    body.dark-mode .kwyx-row.green { background: #1b2a1e; }
-    body.dark-mode .kwyx-row.blue { background: #1a2330; }
-    body.dark-mode .kwyx-row.red .kwyx-cell { color: #f4c7c3; }
-    body.dark-mode .kwyx-row.yellow .kwyx-cell { color: #f0e1a8; }
-    body.dark-mode .kwyx-row.green .kwyx-cell { color: #c8e6c9; }
-    body.dark-mode .kwyx-row.blue .kwyx-cell { color: #c3d7f5; }
-
-    @media (max-width: 900px) and (pointer: coarse) {
-      .kwyx-cells {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: clamp(2px, 0.8vw, 4px);
-        overflow-x: hidden;
-        width: 100%;
-        max-width: 100%;
-      }
-      .kwyx-row.penalty .kwyx-cells { justify-content: space-between; }
-      .kwyx-cell {
-        flex: 0 0 clamp(44px, 12.5vw, 64px);
-        height: auto;
-        aspect-ratio: 1 / 1;
-        border-radius: 5px;
-        font-size: clamp(16px, 4.8vw, 20px);
-      }
-      .kwyx-cell.lock { font-size: clamp(16px, 4.8vw, 20px); }
-    }
-
-    @media (max-width: 720px) {
-      body { padding: 12px; }
-      .dice-container { gap: 8px; }
-      .die { padding: 6px; }
-      button { width: min(100%, 320px); }
-      .toggle-row { flex-direction: column; align-items: flex-start; }
-      .deckel-inline { margin-left: 0; }
-      .code-input-row { flex-direction: column; }
-      .lobby-item { flex-direction: column; align-items: flex-start; }
-      .lobby-item button { width: 100%; }
-      #kniffelScoreTable .score-table { min-width: 0; font-size: 0.7rem; }
-      #kniffelScoreTable .score-table th,
-      #kniffelScoreTable .score-table td { padding: 3px 4px; }
-      #kniffelScoreTable .score-table th:first-child,
-      #kniffelScoreTable .score-table td:first-child { width: 24%; }
-      #kniffelScoreTable .kniffel-cell-button,
-      #kniffelScoreTable .kniffel-cell-text { min-height: 24px; }
-      .kwyx-row { flex-direction: column; align-items: stretch; padding: 4px; gap: 4px; }
-      .kwyx-row-label { width: auto; font-size: 12px; margin-bottom: 4px; }
-      .kwyx-row.penalty { flex-direction: column; align-items: stretch; }
-      .kwyx-row.penalty .kwyx-row-label { margin-bottom: 4px; }
-      .kwyx-cells { gap: clamp(2px, 1vw, 5px); }
-      .kwyx-cell { min-height: clamp(46px, 13vw, 68px); }
-      .kwyx-cells {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 4px;
-        overflow-x: hidden;
-        width: 100%;
-        max-width: 100%;
-      }
-      .kwyx-row.penalty .kwyx-cells { justify-content: space-between; }
-      .kwyx-cell { flex: 0 0 clamp(44px, 12.5vw, 64px); height: auto; aspect-ratio: 1 / 1; border-radius: 5px; }
-    }
-
-    @media (max-width: 600px) {
-      .kwyx-die { font-size: clamp(48px, 12vw, 90px); line-height: 1; padding: 6px; }
-      .kwyx-cell { font-size: clamp(16px, 5vw, 20px); }
-      .kwyx-cell.lock { font-size: clamp(16px, 5vw, 20px); }
-      .kwyx-card { margin: 8px 0; }
-      .card { font-size: 24px; }
-      .card-row { gap: 6px; }
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/css/main.css" />
 </head>
 <body>
   <div class="theme-toggle" role="group" aria-label="Darstellung umschalten">
     <label for="themeToggle">Dunkelmodus</label>
     <input type="checkbox" id="themeToggle" />
   </div>
+
   <!-- Seitenkopf mit dynamischem Logo je Spieltyp -->
   <h1 id="pageTitle" class="page-title">
     <img id="pageTitleLogo" class="page-title-logo" src="/header_Lobby.png" alt="Spieleflur Lobby" />
@@ -406,21 +48,21 @@
         <h3>Wieder beitreten</h3>
         <div class="small">Wir haben ein gespeichertes Room-Login gefunden.</div>
         <button id="btnRejoin">Wieder beitreten</button>
-        <button id="btnForget">Vergessen</button>
+        <button id="btnForget" class="btn-secondary">Vergessen</button>
       </div>
 
       <hr />
       <h3>Spiel beitreten oder erstellen</h3>
-      <div class="small">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
-      <input id="playerName" class="text-input centered" type="text" placeholder="Dein Name" />
+      <div class="small muted" style="margin-bottom: 10px;">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
+      <input id="playerName" class="text-input centered" type="text" placeholder="Dein Name" autocomplete="nickname" />
       <div class="code-input-row">
-        <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" />
+        <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" autocomplete="off" />
         <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
           <span>🔄</span>
         </button>
       </div>
       <button id="btnEnter" class="centered">Los!</button>
-      <div id="joinStatus" class="small muted"></div>
+      <div id="joinStatus" class="small muted" style="margin-top: 6px;"></div>
 
       <hr />
       <!-- Öffentliche Lobby-Liste (nur wenn man nicht in einer Lobby ist) -->
@@ -435,21 +77,21 @@
         <div class="codeBig" id="roomCodeBig">------</div>
         <div class="playerList" id="playerList"></div>
         <div class="playerList" id="pendingList"></div>
-        <div class="small muted" id="roomSettingsSummary"></div>
-        <div id="hostControls" style="display:none; margin-top: 10px;">
+        <div class="small muted" id="roomSettingsSummary" style="margin-top: 6px;"></div>
+        <div id="hostControls" style="display:none; margin-top: 12px;">
           <button id="btnStartGame">Spiel starten</button>
         </div>
-        <div id="leaveLobbyWrap" style="display:none; margin-top: 10px;">
-          <button id="btnLeaveLobby">Lobby verlassen</button>
+        <div id="leaveLobbyWrap" style="display:none; margin-top: 8px;">
+          <button id="btnLeaveLobby" class="btn-secondary">Lobby verlassen</button>
         </div>
-        <div id="lobbyExpiryNotice" style="display:none; margin-top: 10px; border: 1px solid #f3c97a; border-radius: 10px; padding: 10px; background: #fff7e6;">
+        <div id="lobbyExpiryNotice" style="display:none; margin-top: 12px;">
           <div class="small" id="lobbyExpiryText"></div>
           <button id="btnKeepLobby" style="margin: 8px 0 0;">Lobby behalten</button>
         </div>
-        <div class="small" id="hostStartHint">Nur der Host kann das Spiel starten.</div>
+        <div class="small muted" id="hostStartHint" style="margin-top: 8px;">Nur der Host kann das Spiel starten.</div>
       </div>
 
-      <div id="lobbyError" style="color:red; margin-top: 10px;"></div>
+      <div id="lobbyError" style="margin-top: 10px;"></div>
     </div>
   </div>
 
@@ -459,7 +101,7 @@
       <button id="btnReload" class="icon-btn" title="Neu laden" aria-label="Neu laden">🔄</button>
     </div>
     <h2 id="playerDisplay">Am Zug: -</h2>
-    <div class="small" id="turnHint"></div>
+    <div class="small muted" id="turnHint"></div>
 
     <!-- Schocken-Ansicht -->
     <div id="schockenView">
@@ -470,10 +112,10 @@
       </div>
 
       <button id="rollBtn">Würfeln</button>
-      <button id="endTurnBtn">Zug beenden</button>
+      <button id="endTurnBtn" class="btn-secondary">Zug beenden</button>
 
       <div id="throwCount">Wurf: 0</div>
-      <div id="roundDisplay" style="margin-top:10px; font-weight:bold;">Runde: 1</div>
+      <div id="roundDisplay">Runde: 1</div>
       <div id="result"></div>
     </div>
 
@@ -488,7 +130,7 @@
       </div>
 
       <button id="kniffelRollBtn">Würfeln</button>
-      <button id="kniffelEndTurnBtn">Kategorie sichern</button>
+      <button id="kniffelEndTurnBtn" class="btn-secondary">Kategorie sichern</button>
 
       <div id="kniffelThrowCount">Wurf: 0</div>
       <div id="kniffelResult"></div>
@@ -514,14 +156,14 @@
       <div class="kwyx-actions">
         <div class="kwyx-action-buttons">
           <button id="kwyxRollBtn">Würfeln</button>
-          <button id="kwyxEndTurnBtn">Zug beenden</button>
+          <button id="kwyxEndTurnBtn" class="btn-secondary">Zug beenden</button>
         </div>
-      <div class="small" id="kwyxTurnHint"></div>
+        <div class="small muted" id="kwyxTurnHint"></div>
       </div>
 
       <div id="kwyxResult"></div>
       <div class="kwyx-points">
-        <div class="small muted">Punkteübersicht pro Reihe (Schloss zählt als zusätzliches Kreuz)</div>
+        <div class="small muted" style="margin-bottom: 6px;">Punkteübersicht pro Reihe (Schloss zählt als zusätzliches Kreuz)</div>
         <table>
           <thead>
             <tr>
@@ -552,8 +194,8 @@
       <div class="card-actions">
         <button id="schwimmenSwapBtn">1 Karte tauschen</button>
         <button id="schwimmenSwapAllBtn">Alle tauschen</button>
-        <button id="schwimmenPassBtn">Schieben</button>
-        <button id="schwimmenKnockBtn">Klopfen</button>
+        <button id="schwimmenPassBtn" class="btn-secondary">Schieben</button>
+        <button id="schwimmenKnockBtn" class="btn-secondary">Klopfen</button>
         <button id="schwimmenNextRoundBtn" style="display:none;">Neue Runde starten</button>
       </div>
 
@@ -577,8 +219,8 @@
 
     <div id="historyTable" style="margin-top: 14px;"></div>
 
-    <div id="backToLobbyWrap" style="margin-top: 14px;">
-      <button id="btnBackToLobby">Zurück zur Lobby</button>
+    <div id="backToLobbyWrap" style="margin-top: 16px;">
+      <button id="btnBackToLobby" class="btn-secondary">Zurück zur Lobby</button>
     </div>
   </div>
 
