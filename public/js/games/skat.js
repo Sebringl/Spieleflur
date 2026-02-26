@@ -46,7 +46,7 @@ function renderSkatGame() {
       setBodyBackgroundColor("");
 
       document.getElementById("turnHint").textContent = "";
-      document.getElementById("backToLobbyWrap").style.display = isHost ? "block" : "none";
+      document.getElementById("backToLobbyWrap").style.display = canShowBackToLobby() ? "block" : "none";
       updateDeckelToggleState();
       updateLobbyVisibility();
 

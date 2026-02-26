@@ -179,6 +179,13 @@
     function showJoinStatus(msg) {
       document.getElementById("joinStatus").textContent = msg || "";
     }
+
+    function canShowBackToLobby() {
+      if (!room) return false;
+      if (isHost) return true;
+      return typeof mySeat === "number" && mySeat >= 0 && room.hostSeat === mySeat;
+    }
+
     // Verhindert, dass man versehentlich in eine zweite Lobby springt.
     function canEnterRoom(requestedCode) {
       if (myRoomCode && myToken) {
@@ -572,12 +579,10 @@
     socket.on("room_update", (payloadRoom) => {
       room = payloadRoom;
       if (room && typeof room.hostSeat === "number" && myName) {
-        if (room.status === "lobby") {
-          const idx = room.players.findIndex(p => p.name.toLowerCase() === myName.toLowerCase());
-          if (idx >= 0) {
-            mySeat = idx;
-            localStorage.setItem("schocken_seat", String(mySeat));
-          }
+        const idx = room.players.findIndex(p => p.name.toLowerCase() === myName.toLowerCase());
+        if (idx >= 0) {
+          mySeat = idx;
+          localStorage.setItem("schocken_seat", String(mySeat));
         }
         if (mySeat >= 0) {
           isHost = room.hostSeat === mySeat;
