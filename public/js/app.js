@@ -95,14 +95,16 @@
       kniffel: "Yahtzee",
       kwyx: "Kwyx",
       schwimmen: "Schwimmen",
-      skat: "Skat"
+      skat: "Skat",
+      schiffeversenken: "Schiffe versenken"
     };
     const gameTypeRequirements = {
       schocken: { min: 2 },
       kniffel: { min: 2 },
       kwyx: { min: 2 },
       schwimmen: { min: 2 },
-      skat: { exact: 3 }
+      skat: { exact: 3 },
+      schiffeversenken: { exact: 2 }
     };
 
     // Persistenter Spieler-Kontext (für Rejoin und Komfort).
@@ -134,7 +136,8 @@
       schwimmen: "/header_schwimmen.png",
       kniffel: "/header_yahtzee.png",
       kwyx: "/header_kwyx.png",
-      skat: "/header_Skat.png"
+      skat: "/header_Skat.png",
+      schiffeversenken: "/header_Lobby.png"
     };
 
     // Wechselt Logo und Titel je nach Spielansicht.
@@ -264,12 +267,17 @@
       return isCurrentGameType("skat");
     }
 
+    function isSchiffeversenkenGame() {
+      return isCurrentGameType("schiffeversenken");
+    }
+
     // Liefert das passende Ergebnis-Element je Spieltyp.
     function getGameResultElement() {
       if (isKniffelGame()) return document.getElementById("kniffelResult");
       if (isKwyxGame()) return document.getElementById("kwyxResult");
       if (isSchwimmenGame()) return document.getElementById("schwimmenResult");
       if (isSkatGame()) return document.getElementById("skatResult");
+      if (isSchiffeversenkenGame()) return document.getElementById("svResult");
       return document.getElementById("result");
     }
 
@@ -514,6 +522,8 @@
         renderSchwimmenGame();
       } else if (isSkatGame()) {
         renderSkatGame();
+      } else if (isSchiffeversenkenGame()) {
+        renderSchiffeversenkenGame();
       } else {
         renderSchockenGame();
       }

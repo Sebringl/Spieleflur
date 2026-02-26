@@ -4,6 +4,7 @@ import { initializeKniffelRoom } from "./kniffel.js";
 import { createSchwimmenState } from "./schwimmen.js";
 import { createSkatState } from "./skat.js";
 import { createKwyxState } from "./kwyx.js";
+import { createSchiffeversenkenState } from "./schiffeversenken.js";
 
 export function startNewGame(room) {
   const gameType = room.settings.gameType;
@@ -21,6 +22,9 @@ export function startNewGame(room) {
       break;
     case "kwyx":
       room.state = createKwyxState(playerNames);
+      break;
+    case "schiffeversenken":
+      room.state = createSchiffeversenkenState(playerNames);
       break;
     default:
       room.state = initializeSchockenRoom(room);

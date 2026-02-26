@@ -24,6 +24,9 @@ import {
   KWYX_ROWS, ensureKwyxTurnState, resetKwyxTurnState, clearKwyxCountdown,
   shouldFinishKwyxGame, canMarkKwyxRow, updateKwyxTotals, getKwyxRowIndex
 } from "./games/kwyx.js";
+import {
+  canPlaceShip, placeShip, recordShot, isGameOver, getWinnerIndex
+} from "./games/schiffeversenken.js";
 
 // ---- Hilfsfunktionen ----
 
@@ -247,6 +250,9 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann starten." });
       if (room.settings.gameType === "skat" && room.players.length !== 3) {
         return socket.emit("error_msg", { message: "Skat benötigt genau 3 Spieler." });
+      }
+      if (room.settings.gameType === "schiffeversenken" && room.players.length !== 2) {
+        return socket.emit("error_msg", { message: "Schiffe versenken benötigt genau 2 Spieler." });
       }
       if (room.players.length < 2) return socket.emit("error_msg", { message: "Mindestens 2 Spieler nötig." });
       startNewGame(room);
@@ -865,6 +871,88 @@ export function registerSocketHandlers(io, rooms, persistFn) {
     });
 
     // ---- Disconnect ----
+
+    // ---- Schiffe versenken ----
+
+    socket.on("sv_place_ship", ({ code, shipIndex, row, col, isVertical }) => {
+      const room = rooms.get(normalizeCode(code));
+      if (!room || room.status !== "running") return;
+      const state = room.state;
+      if (!state || state.gameType !== "schiffeversenken") return;
+      if (state.phase !== "setup") return socket.emit("error_msg", { message: "Die Aufbauphase ist vorbei." });
+
+      const seatIndex = getSeatIndexBySocket(room, socket.id);
+      if (seatIndex < 0) return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
+      if (state.setupComplete[seatIndex]) return socket.emit("error_msg", { message: "Du hast bereits alle Schiffe platziert." });
+
+      const board = state.boards[seatIndex];
+      const idx = Number(shipIndex);
+      if (idx < 0 || idx >= board.ships.length) return socket.emit("error_msg", { message: "Ungültiger Schiffsindex." });
+      if (board.ships[idx].cells.length > 0) return socket.emit("error_msg", { message: "Dieses Schiff ist bereits platziert." });
+
+      if (!canPlaceShip(board.grid, board.ships[idx].length, row, col, !!isVertical)) {
+        return socket.emit("error_msg", { message: "Schiff kann dort nicht platziert werden." });
+      }
+
+      placeShip(board, idx, row, col, !!isVertical);
+
+      // Prüfen ob alle Schiffe platziert wurden
+      const allPlaced = board.ships.every(s => s.cells.length > 0);
+      if (allPlaced) {
+        state.setupComplete[seatIndex] = true;
+      }
+
+      // Beide bereit? Spiel starten
+      if (state.setupComplete[0] && state.setupComplete[1]) {
+        state.phase = "playing";
+        state.currentPlayer = 0;
+        state.message = `${state.players[0]} beginnt!`;
+      } else if (state.setupComplete[seatIndex]) {
+        state.message = `${state.players[seatIndex]} ist bereit. Warte auf ${state.players[1 - seatIndex]}…`;
+      }
+
+      io.to(room.code).emit("state_update", state);
+      persist();
+    });
+
+    socket.on("sv_shoot", ({ code, row, col }) => {
+      const room = rooms.get(normalizeCode(code));
+      if (!room || room.status !== "running") return;
+      const state = room.state;
+      if (!state || state.gameType !== "schiffeversenken") return;
+      if (state.phase !== "playing" || state.winner !== null) return;
+
+      const seatIndex = getSeatIndexBySocket(room, socket.id);
+      if (seatIndex < 0) return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
+      if (state.currentPlayer !== seatIndex) return socket.emit("error_msg", { message: "Du bist nicht am Zug." });
+
+      const targetSeat = 1 - seatIndex;
+      const targetBoard = state.boards[targetSeat];
+
+      const result = recordShot(targetBoard, row, col);
+      if (!result.valid) return socket.emit("error_msg", { message: "Dieses Feld wurde bereits beschossen." });
+
+      state.lastShot = { row, col };
+      state.lastResult = result.hit ? (result.sunk ? "sunk" : "hit") : "miss";
+
+      if (isGameOver(state.boards)) {
+        const winnerIdx = getWinnerIndex(state.boards);
+        state.winner = state.players[winnerIdx];
+        state.phase = "finished";
+        state.message = `🎉 ${state.winner} gewinnt! Alle Schiffe versenkt!`;
+      } else if (result.hit) {
+        // Bei Treffer darf der Spieler nochmal schießen
+        const hitMsg = result.sunk ? "Schiff versenkt!" : "Treffer!";
+        state.message = `${hitMsg} ${state.players[seatIndex]} schießt erneut.`;
+      } else {
+        // Bei Wasser wechselt der Zug
+        state.currentPlayer = targetSeat;
+        state.message = `Wasser! ${state.players[targetSeat]} ist am Zug.`;
+      }
+
+      io.to(room.code).emit("state_update", state);
+      persist();
+    });
 
     socket.on("disconnect", () => {
       for (const room of rooms.values()) {
