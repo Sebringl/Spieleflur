@@ -248,6 +248,7 @@
     }
 
     function isCurrentGameType(type) {
+      if (state?.gameType) return state.gameType === type;
       return room?.settings?.gameType === type;
     }
 

@@ -395,6 +395,8 @@ body.dark-mode .pill.neutral { border-color: var(--color-border); }
   width: 18px;
   height: 18px;
   margin: 0;
+  appearance: auto;
+  -webkit-appearance: checkbox;
   accent-color: var(--color-accent);
   padding: 0;
   border: 1.5px solid var(--color-border);
@@ -512,6 +514,7 @@ body.dark-mode #lobbyExpiryNotice {
 .dice-container {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 12px;
   margin: 16px 0;
   flex-wrap: wrap;
