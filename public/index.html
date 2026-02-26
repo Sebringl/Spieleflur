@@ -40,6 +40,10 @@
           <input type="checkbox" id="deckelToggle" />
           <span>Mit Deckeln spielen</span>
         </label>
+        <label class="deckel-inline" for="kniffelHandBonusToggle">
+          <input type="checkbox" id="kniffelHandBonusToggle" checked />
+          <span>Hand: +5 Punkte</span>
+        </label>
       </div>
 
       <hr />
@@ -114,7 +118,6 @@
       <button id="rollBtn">Würfeln</button>
       <button id="endTurnBtn" class="btn-secondary">Zug beenden</button>
 
-      <div id="throwCount">Wurf: 0</div>
       <div id="roundDisplay">Runde: 1</div>
       <div id="result"></div>
     </div>
@@ -132,7 +135,6 @@
       <button id="kniffelRollBtn">Würfeln</button>
       <button id="kniffelEndTurnBtn" class="btn-secondary">Kategorie sichern</button>
 
-      <div id="kniffelThrowCount">Wurf: 0</div>
       <div id="kniffelResult"></div>
       <div id="kniffelScoreTable" style="margin-top: 14px;"></div>
     </div>

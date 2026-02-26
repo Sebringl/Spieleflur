@@ -78,7 +78,6 @@
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
-      document.getElementById("throwCount").textContent = `Wurf: ${state.throwCount}`;
       document.getElementById("roundDisplay").textContent = `Runde: ${state.roundNumber}`;
 
       const colorIdx = state.currentPlayer % playerTextColors.length;

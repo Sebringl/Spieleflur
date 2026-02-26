@@ -22,6 +22,7 @@ export function getLobbyList(rooms) {
       hostName: room.players[room.hostSeat]?.name || "Host",
       playerCount: room.players.length,
       useDeckel: !!room.settings.useDeckel,
+      kniffelHandBonus: room.settings.kniffelHandBonus !== false,
       gameType: room.settings.gameType || "schocken"
     }));
 }
@@ -39,10 +40,11 @@ export function markLobbyActivity(room) {
   room.lobbyWarnedAt = null;
 }
 
-export function updateRoomSettings({ room, useDeckel, gameType }) {
+export function updateRoomSettings({ room, useDeckel, kniffelHandBonus, gameType }) {
   const nextGameType = normalizeRoomGameType(gameType);
   room.settings.gameType = nextGameType;
   room.settings.useDeckel = nextGameType === "schocken" ? !!useDeckel : false;
+  room.settings.kniffelHandBonus = nextGameType === "kniffel" ? kniffelHandBonus !== false : true;
 }
 
 export function removePlayerFromRoom({ room, seatIndex }) {
@@ -105,7 +107,7 @@ export function cleanupInactiveLobbies(rooms, io, { emit = true, persistFn } = {
   return removed;
 }
 
-export function createRoom({ socket, rooms, name, useDeckel, gameType, requestedCode, persistFn, emitLobbyList }) {
+export function createRoom({ socket, rooms, name, useDeckel, kniffelHandBonus, gameType, requestedCode, persistFn, emitLobbyList }) {
   let code;
   const normalizedRequested = normalizeCode(requestedCode);
   if (normalizedRequested) {
@@ -127,6 +129,7 @@ export function createRoom({ socket, rooms, name, useDeckel, gameType, requested
     status: "lobby",
     settings: {
       useDeckel: normalizedGameType === "schocken" ? !!useDeckel : false,
+      kniffelHandBonus: normalizedGameType === "kniffel" ? kniffelHandBonus !== false : true,
       gameType: normalizedGameType
     },
     hostToken: token,

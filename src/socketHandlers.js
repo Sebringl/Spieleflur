@@ -126,10 +126,10 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       socket.emit("lobby_list", { lobbies: getLobbyList(rooms) });
     });
 
-    socket.on("create_room", ({ name, useDeckel, gameType, requestedCode }) => {
+    socket.on("create_room", ({ name, useDeckel, kniffelHandBonus, gameType, requestedCode }) => {
       if (blockIfAlreadyInRoom(socket, rooms)) return;
       const cleanName = String(name || "").trim() || "Spieler";
-      const result = createRoom({ socket, rooms, name: cleanName, useDeckel, gameType, requestedCode, persistFn: persist });
+      const result = createRoom({ socket, rooms, name: cleanName, useDeckel, kniffelHandBonus, gameType, requestedCode, persistFn: persist });
       if (!result) return;
       const { room } = result;
       io.to(room.code).emit("room_update", safeRoom(room));
@@ -141,7 +141,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       handleJoinRequest(socket, io, rooms, persist, { code, name });
     });
 
-    socket.on("enter_room", ({ name, requestedCode, useDeckel, gameType }) => {
+    socket.on("enter_room", ({ name, requestedCode, useDeckel, kniffelHandBonus, gameType }) => {
       if (blockIfAlreadyInRoom(socket, rooms)) return;
       const cleanName = String(name || "").trim() || "Spieler";
       const normalized = normalizeCode(requestedCode);
@@ -157,7 +157,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
           return handleJoinRequest(socket, io, rooms, persist, { code: normalized, name: cleanName });
         }
       }
-      const result = createRoom({ socket, rooms, name: cleanName, useDeckel, gameType, requestedCode: normalized, persistFn: persist });
+      const result = createRoom({ socket, rooms, name: cleanName, useDeckel, kniffelHandBonus, gameType, requestedCode: normalized, persistFn: persist });
       if (!result) return;
       const { room } = result;
       io.to(room.code).emit("room_update", safeRoom(room));
@@ -257,12 +257,12 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       persist();
     });
 
-    socket.on("update_room_settings", ({ code, token, useDeckel, gameType }) => {
+    socket.on("update_room_settings", ({ code, token, useDeckel, kniffelHandBonus, gameType }) => {
       const room = rooms.get(normalizeCode(code));
       if (!room) return;
       if (room.hostToken !== token) return socket.emit("error_msg", { message: "Nur der Host kann Einstellungen ändern." });
       if (room.status !== "lobby") return socket.emit("error_msg", { message: "Spiel läuft bereits." });
-      updateRoomSettings({ room, useDeckel, gameType });
+      updateRoomSettings({ room, useDeckel, kniffelHandBonus, gameType });
       io.to(room.code).emit("room_update", safeRoom(room));
       lobbyList();
       persist();
@@ -694,7 +694,8 @@ export function registerSocketHandlers(io, rooms, persistFn) {
         if (!KNIFFEL_CATEGORIES.includes(category)) return socket.emit("error_msg", { message: "Bitte eine Kategorie wählen." });
         const card = state.scorecard[state.currentPlayer];
         if (!card || card[category] !== null) return socket.emit("error_msg", { message: "Kategorie bereits gewählt." });
-        const scored = scoreKniffel(state.dice, category);
+        const handBonusEnabled = room.settings?.gameType === "kniffel" ? !!room.settings?.kniffelHandBonus : true;
+        const scored = scoreKniffel(state.dice, category, state.throwCount, handBonusEnabled);
         card[category] = scored.score;
         state.totals[state.currentPlayer] = Object.values(card).reduce((acc, val) => acc + (val || 0), 0);
         state.message = `${state.players[state.currentPlayer]} wählt ${scored.label}: ${scored.score} Punkte.`;

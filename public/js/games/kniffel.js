@@ -6,13 +6,13 @@
       { key: "fours", label: "Vierer" },
       { key: "fives", label: "Fünfer" },
       { key: "sixes", label: "Sechser" },
-      { key: "threeKind", label: "Dreierpasch" },
-      { key: "fourKind", label: "Viererpasch" },
-      { key: "fullHouse", label: "Full House" },
-      { key: "smallStraight", label: "Kleine Straße" },
-      { key: "largeStraight", label: "Große Straße" },
-      { key: "yahtzee", label: "Yahtzee" },
-      { key: "chance", label: "Chance" }
+      { key: "threeKind", label: "Dreierpasch", pointsInfo: "Würfelsumme" },
+      { key: "fourKind", label: "Viererpasch", pointsInfo: "Würfelsumme" },
+      { key: "fullHouse", label: "Full House", pointsInfo: "25" },
+      { key: "smallStraight", label: "Kleine Straße", pointsInfo: "30" },
+      { key: "largeStraight", label: "Große Straße", pointsInfo: "40" },
+      { key: "yahtzee", label: "Yahtzee", pointsInfo: "50" },
+      { key: "chance", label: "Chance", pointsInfo: "Würfelsumme" }
     ];
     const kniffelUpperKeys = kniffelCategories.slice(0, 6).map(cat => cat.key);
     const kniffelLowerKeys = kniffelCategories.slice(6).map(cat => cat.key);
@@ -29,6 +29,7 @@
       const grandTotal = upperTotal + lowerSum;
       return { upperSum, bonus, lowerSum, upperTotal, grandTotal };
     }
+
 
     function renderKniffelScoreTable(myTurn) {
       if (!state || !state.scorecard) {
@@ -84,7 +85,8 @@
       html += "</tr>";
 
       lowerCategories.forEach(cat => {
-        html += `<tr><td>${cat.label}</td>`;
+        const labelWithScore = cat.pointsInfo ? `${cat.label} (${cat.pointsInfo})` : cat.label;
+        html += `<tr><td>${labelWithScore}</td>`;
         state.players.forEach((_, pIdx) => {
           const val = state.scorecard[pIdx]?.[cat.key];
           const isEmpty = val === null || typeof val === "undefined";
@@ -106,13 +108,13 @@
         html += "</tr>";
       });
 
-      html += "<tr><th>Summe oberer Bereich</th>";
+      html += "<tr class=\"kniffel-subtotal\"><th>Summe oberer Bereich</th>";
       totalsByPlayer.forEach(totals => {
         html += `<td class="kniffel-score-cell"><span class="kniffel-cell-text">${totals.upperTotal}</span></td>`;
       });
       html += "</tr>";
 
-      html += "<tr><th>Summe unterer Bereich</th>";
+      html += "<tr class=\"kniffel-subtotal\"><th>Summe unterer Bereich</th>";
       totalsByPlayer.forEach(totals => {
         html += `<td class="kniffel-score-cell"><span class="kniffel-cell-text">${totals.lowerSum}</span></td>`;
       });
@@ -163,7 +165,6 @@
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
-      document.getElementById("kniffelThrowCount").textContent = `Wurf: ${state.throwCount}`;
 
       const colorIdx = state.currentPlayer % playerTextColors.length;
       document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
