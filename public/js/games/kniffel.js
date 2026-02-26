@@ -32,24 +32,28 @@
 
 
     function renderKniffelScoreTable(myTurn) {
-      if (!state || !state.scorecard) {
+      if (!state || !Array.isArray(state.scorecard)) {
         document.getElementById("kniffelScoreTable").innerHTML = "";
         return;
       }
       const canInteract = myTurn && !state.finished;
       const upperCategories = kniffelCategories.slice(0, 6);
       const lowerCategories = kniffelCategories.slice(6);
-      const totalsByPlayer = state.players.map((_, pIdx) => getKniffelTotals(state.scorecard[pIdx] || {}));
+      const fallbackPlayers = state.scorecard.map((_, idx) => `Spieler ${idx + 1}`);
+      const playerNames = (Array.isArray(state.players) && state.players.length > 0)
+        ? state.players
+        : fallbackPlayers;
+      const totalsByPlayer = playerNames.map((_, pIdx) => getKniffelTotals(state.scorecard[pIdx] || {}));
       let html = "<h3>Scorecard</h3><table class='score-table'>";
       html += "<tr><th>Kategorie</th>";
-      state.players.forEach((name, i) => {
+      playerNames.forEach((name, i) => {
         html += `<th style="color:${playerTextColors[i % playerTextColors.length]};">${escapeHtml(name)}</th>`;
       });
       html += "</tr>";
 
       upperCategories.forEach(cat => {
         html += `<tr><td>${cat.label}</td>`;
-        state.players.forEach((_, pIdx) => {
+        playerNames.forEach((_, pIdx) => {
           const val = state.scorecard[pIdx]?.[cat.key];
           const isEmpty = val === null || typeof val === "undefined";
           if (pIdx === mySeat && isEmpty) {
@@ -87,7 +91,7 @@
       lowerCategories.forEach(cat => {
         const labelWithScore = cat.pointsInfo ? `${cat.label} (${cat.pointsInfo})` : cat.label;
         html += `<tr><td>${labelWithScore}</td>`;
-        state.players.forEach((_, pIdx) => {
+        playerNames.forEach((_, pIdx) => {
           const val = state.scorecard[pIdx]?.[cat.key];
           const isEmpty = val === null || typeof val === "undefined";
           if (pIdx === mySeat && isEmpty) {
@@ -121,7 +125,7 @@
       html += "</tr>";
 
       html += "<tr><th>Gesamtsumme</th>";
-      state.players.forEach((_, pIdx) => {
+      playerNames.forEach((_, pIdx) => {
         html += `<th>${totalsByPlayer[pIdx]?.grandTotal ?? 0}</th>`;
       });
       html += "</tr></table>";
