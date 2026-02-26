@@ -395,7 +395,7 @@
         hint.textContent = isHost ? "Nur du kannst das Spiel starten." : "Nur der Host kann das Spiel starten.";
       }
       renderPendingList([]);
-      updateDeckelToggleState();
+      updateLobbyOptionToggles();
       updateGameTypeSelectState();
       updateLobbyVisibility();
       updateStartButtonState();
@@ -405,6 +405,9 @@
         if (room.settings.gameType === "schocken") {
           const deckelLabel = room.settings.useDeckel ? "mit Deckeln" : "ohne Deckel";
           settingsSummary.textContent = `Einstellungen: ${typeLabel} · ${deckelLabel}`;
+        } else if (room.settings.gameType === "kniffel") {
+          const handBonusLabel = room.settings.kniffelHandBonus !== false ? "mit Hand: +5" : "ohne Hand: +5";
+          settingsSummary.textContent = `Einstellungen: ${typeLabel} · ${handBonusLabel}`;
         } else {
           settingsSummary.textContent = `Einstellungen: ${typeLabel}`;
         }
@@ -471,7 +474,7 @@
         html += `<div class="lobby-item">
           <div>
             <div><strong>${lobby.code}</strong> · ${host}</div>
-            <div class="small muted">${lobby.playerCount} Spieler · ${gameLabel}${lobby.gameType === "schocken" ? (lobby.useDeckel ? " · mit Deckeln" : " · ohne Deckel") : ""}</div>
+            <div class="small muted">${lobby.playerCount} Spieler · ${gameLabel}${lobby.gameType === "schocken" ? (lobby.useDeckel ? " · mit Deckeln" : " · ohne Deckel") : ""}${lobby.gameType === "kniffel" ? ((lobby.kniffelHandBonus !== false) ? " · mit Hand: +5" : " · ohne Hand: +5") : ""}</div>
           </div>
           <button data-join="${lobby.code}">Beitreten</button>
         </div>`;
@@ -491,6 +494,7 @@
             name,
             requestedCode: code,
             useDeckel: document.getElementById("deckelToggle").checked,
+            kniffelHandBonus: document.getElementById("kniffelHandBonusToggle").checked,
             gameType: getSelectedGameType()
           });
         };
@@ -647,7 +651,7 @@
         showLobbyExpiryNotice("");
         document.getElementById("rejoinBox").style.display = "none";
         setView("lobby");
-        updateDeckelToggleState();
+        updateLobbyOptionToggles();
         updateLobbyVisibility();
         showLobbyError("");
         return;
@@ -697,7 +701,7 @@
       localStorage.removeItem("schocken_seat");
       setView("lobby");
       showLobbyError(message || "Lobby wurde gelöscht.");
-      updateDeckelToggleState();
+      updateLobbyOptionToggles();
       updateLobbyVisibility();
       socket.emit("get_lobby_list");
     });
@@ -714,7 +718,7 @@
       localStorage.removeItem("schocken_seat");
       setView("lobby");
       showLobbyError(message || "");
-      updateDeckelToggleState();
+      updateLobbyOptionToggles();
       updateLobbyVisibility();
       socket.emit("get_lobby_list");
     });
@@ -725,6 +729,7 @@
       const code = document.getElementById("roomCode").value.trim().toUpperCase();
       const useDeckel = document.getElementById("deckelToggle").checked;
       const gameType = getSelectedGameType();
+      const kniffelHandBonus = document.getElementById("kniffelHandBonusToggle").checked;
       if (!name) return showLobbyError("Bitte Name eingeben.");
       if (!canEnterRoom(code)) return;
       storePlayerName(name);
@@ -735,7 +740,7 @@
       } else {
         showJoinStatus("Erstelle neue Lobby…");
       }
-      socket.emit("enter_room", { name, requestedCode: code, useDeckel, gameType });
+      socket.emit("enter_room", { name, requestedCode: code, useDeckel, kniffelHandBonus, gameType });
     };
 
     document.getElementById("btnStartGame").onclick = () => {
@@ -864,7 +869,7 @@
       showLobbyExpiryNotice("");
       document.getElementById("rejoinBox").style.display = "none";
       showLobbyError("Vergessen. Du kannst neu erstellen oder beitreten.");
-      updateDeckelToggleState();
+      updateLobbyOptionToggles();
       updateLobbyVisibility();
       socket.emit("get_lobby_list");
     };
@@ -887,12 +892,28 @@
         code: room.code,
         token: myToken,
         useDeckel: event.target.checked,
+        kniffelHandBonus: room.settings?.kniffelHandBonus !== false,
         gameType: room.settings?.gameType || "schocken"
       });
     };
 
+    document.getElementById("kniffelHandBonusToggle").onchange = (event) => {
+      if (!room || !myToken) return;
+      if (!isHost || room.status !== "lobby") {
+        event.target.checked = room?.settings?.kniffelHandBonus !== false;
+        return;
+      }
+      socket.emit("update_room_settings", {
+        code: room.code,
+        token: myToken,
+        useDeckel: !!room.settings?.useDeckel,
+        kniffelHandBonus: event.target.checked,
+        gameType: room.settings?.gameType || "kniffel"
+      });
+    };
+
     document.getElementById("gameTypeSelect").onchange = (event) => {
-      updateDeckelToggleState();
+      updateLobbyOptionToggles();
       updateHeader("lobby");
       updateStartButtonState();
       if (!room || !myToken) return;
@@ -904,6 +925,7 @@
         code: room.code,
         token: myToken,
         useDeckel: room.settings?.useDeckel,
+        kniffelHandBonus: room.settings?.kniffelHandBonus !== false,
         gameType: event.target.value
       });
     };
@@ -913,6 +935,7 @@
       setSuggestedCode();
       document.getElementById("gameTypeSelect").value = "schocken";
       updateHeader("lobby");
+      updateLobbyOptionToggles();
       if (myName) {
         document.getElementById("playerName").value = myName;
       }
@@ -963,20 +986,30 @@
       }
     });
 
-    function updateDeckelToggleState() {
-      const toggle = document.getElementById("deckelToggle");
-      if (!toggle) return;
+    function updateLobbyOptionToggles() {
+      const deckelToggle = document.getElementById("deckelToggle");
+      const handToggle = document.getElementById("kniffelHandBonusToggle");
+      if (!deckelToggle || !handToggle) return;
       const selectedType = room?.settings?.gameType
         || document.getElementById("gameTypeSelect")?.value
         || "schocken";
       const isSchocken = selectedType === "schocken";
+      const isKniffel = selectedType === "kniffel";
+
       if (room && room.status === "lobby") {
-        toggle.checked = !!room.settings?.useDeckel && isSchocken;
+        deckelToggle.checked = !!room.settings?.useDeckel && isSchocken;
+        handToggle.checked = room.settings?.kniffelHandBonus !== false && isKniffel;
       }
-      toggle.disabled = !!room
+
+      deckelToggle.disabled = !!room
         ? (!isHost || room.status !== "lobby" || !isSchocken)
         : !isSchocken;
-      toggle.parentElement.style.display = isSchocken ? "flex" : "none";
+      handToggle.disabled = !!room
+        ? (!isHost || room.status !== "lobby" || !isKniffel)
+        : !isKniffel;
+
+      if (deckelToggle.parentElement) deckelToggle.parentElement.style.display = isSchocken ? "flex" : "none";
+      if (handToggle.parentElement) handToggle.parentElement.style.display = isKniffel ? "flex" : "none";
     }
 
     function getGameStartStatus() {

@@ -486,7 +486,7 @@ body.dark-mode #lobbyExpiryNotice {
    SPIELER-ANZEIGE & HINWEISE
    ============================================================ */
 
-#result, #throwCount, #playerDisplay {
+#result, #playerDisplay {
   font-size: 1.05rem;
   margin-top: 10px;
   transition: color var(--transition-base);
