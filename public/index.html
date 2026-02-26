@@ -56,20 +56,24 @@
         <button id="btnForget" class="btn-secondary">Vergessen</button>
       </div>
 
-      <hr />
-      <h3>Spiel beitreten oder erstellen</h3>
-      <div class="small muted" style="margin-bottom: 10px;">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
       <input id="playerName" class="text-input centered" type="text" placeholder="Dein Name" autocomplete="nickname" />
-      <div class="code-input-row">
-        <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" autocomplete="off" />
-        <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
-          <span>🔄</span>
-        </button>
-      </div>
-      <button id="btnEnter" class="centered">Los!</button>
-      <div id="joinStatus" class="small muted" style="margin-top: 6px;"></div>
 
-      <hr />
+      <!-- Wird ausgeblendet, sobald man einer Lobby beigetreten ist -->
+      <div id="joinSection">
+        <hr />
+        <h3>Spiel beitreten oder erstellen</h3>
+        <div class="small muted" style="margin-bottom: 10px;">Name eingeben, Code wählen und loslegen (bei bestehender Lobby bestätigt der Host).</div>
+        <div class="code-input-row">
+          <input id="roomCode" class="text-input" type="text" placeholder="Room-Code (z.B. K7F3Q)" autocomplete="off" />
+          <button id="btnNewCode" class="icon-btn" title="Neuen Code erzeugen" aria-label="Neuen Code erzeugen">
+            <span>🔄</span>
+          </button>
+        </div>
+        <button id="btnEnter" class="centered">Los!</button>
+        <div id="joinStatus" class="small muted" style="margin-top: 6px;"></div>
+        <hr />
+      </div>
+
       <!-- Öffentliche Lobby-Liste (nur wenn man nicht in einer Lobby ist) -->
       <div class="lobby-list" id="activeLobbies">
         <div class="small muted">Aktive Lobbys werden geladen…</div>

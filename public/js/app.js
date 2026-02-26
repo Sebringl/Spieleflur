@@ -1087,6 +1087,8 @@
       const inLobby = !!room && room.status === "lobby";
       const list = document.getElementById("activeLobbies");
       const roomView = document.getElementById("roomView");
+      const joinSection = document.getElementById("joinSection");
+      const rejoinBox = document.getElementById("rejoinBox");
       if (roomView) {
         roomView.style.display = inLobby ? "block" : "none";
       }
@@ -1098,5 +1100,12 @@
       }
       if (!inLobby && list && list.innerHTML.trim() === "") {
         list.innerHTML = "<div class='small muted'>Aktive Lobbys werden geladen…</div>";
+      }
+      // Join-Bereich und Rejoin-Box ausblenden, sobald man in einer Lobby ist
+      if (joinSection) {
+        joinSection.style.display = inLobby ? "none" : "block";
+      }
+      if (inLobby && rejoinBox) {
+        rejoinBox.style.display = "none";
       }
     }
