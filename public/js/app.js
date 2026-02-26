@@ -100,7 +100,7 @@
     };
     const gameTypeRequirements = {
       schocken: { min: 2 },
-      kniffel: { min: 2 },
+      kniffel: { min: 1 },
       kwyx: { min: 2 },
       schwimmen: { min: 2 },
       skat: { exact: 3 },
