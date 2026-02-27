@@ -192,13 +192,10 @@ function svClientCanPlace(grid, length, row, col, isVertical) {
     const c = isVertical ? col : col + i;
     if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
     if (grid[r][c] !== null) return false;
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        const nr = r + dr;
-        const nc = c + dc;
-        if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && grid[nr][nc] === "ship") return false;
-      }
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && grid[nr][nc] === "ship") return false;
     }
   }
   return true;
