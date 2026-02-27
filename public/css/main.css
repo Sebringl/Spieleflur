@@ -1118,7 +1118,21 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-ship-status { color: var(--color-success); font-weight: 700; margin-left: auto; }
 .sv-ship-name { font-size: 0.82rem; color: var(--color-text-muted); }
 
+/* Platzierte Schiffe mit Neu-Setzen-Icon */
+.sv-ship-item.sv-ship-replaceable { cursor: pointer; opacity: 0.75; }
+.sv-ship-item.sv-ship-replaceable:hover { opacity: 1; border-color: var(--color-accent); }
+.sv-ship-replace { margin-left: auto; font-size: 0.85rem; }
+
+/* Spiel-starten-Button */
+.sv-start-btn { margin-top: 10px; width: 100%; }
+
 .sv-setup-grid-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+/* Verhindert Scrollen beim Wischen über das Setup-Gitter */
+#svSetupGrid {
+  touch-action: none;
+  user-select: none;
+}
 .sv-grid-label {
   font-size: 0.82rem;
   font-weight: 600;
@@ -1183,6 +1197,11 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-cell-hover {
   background: rgba(59, 130, 246, 0.4);
   border-color: #3b82f6;
+}
+
+.sv-cell-hover-invalid {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: #ef4444;
 }
 
 .sv-cell-shootable {

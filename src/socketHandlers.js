@@ -25,7 +25,7 @@ import {
   shouldFinishKwyxGame, canMarkKwyxRow, updateKwyxTotals, getKwyxRowIndex
 } from "./games/kwyx.js";
 import {
-  canPlaceShip, placeShip, recordShot, isGameOver, getWinnerIndex
+  canPlaceShip, placeShip, removeShip, recordShot, isGameOver, getWinnerIndex
 } from "./games/schiffeversenken.js";
 
 // ---- Hilfsfunktionen ----
@@ -883,7 +883,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
 
       const seatIndex = getSeatIndexBySocket(room, socket.id);
       if (seatIndex < 0) return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
-      if (state.setupComplete[seatIndex]) return socket.emit("error_msg", { message: "Du hast bereits alle Schiffe platziert." });
+      if (state.readyToStart && state.readyToStart[seatIndex]) return socket.emit("error_msg", { message: "Du hast bereits 'Spiel starten' geklickt." });
 
       const board = state.boards[seatIndex];
       const idx = Number(shipIndex);
@@ -900,14 +900,58 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       const allPlaced = board.ships.every(s => s.cells.length > 0);
       if (allPlaced) {
         state.setupComplete[seatIndex] = true;
+        state.message = `${state.players[seatIndex]}: Alle Schiffe platziert. Bereit zum Starten?`;
       }
 
+      io.to(room.code).emit("state_update", state);
+      persist();
+    });
+
+    socket.on("sv_remove_ship", ({ code, shipIndex }) => {
+      const room = rooms.get(normalizeCode(code));
+      if (!room || room.status !== "running") return;
+      const state = room.state;
+      if (!state || state.gameType !== "schiffeversenken") return;
+      if (state.phase !== "setup") return socket.emit("error_msg", { message: "Die Aufbauphase ist vorbei." });
+
+      const seatIndex = getSeatIndexBySocket(room, socket.id);
+      if (seatIndex < 0) return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
+
+      const board = state.boards[seatIndex];
+      const idx = Number(shipIndex);
+      if (idx < 0 || idx >= board.ships.length) return socket.emit("error_msg", { message: "Ungültiger Schiffsindex." });
+
+      if (!removeShip(board, idx)) return socket.emit("error_msg", { message: "Dieses Schiff ist nicht platziert." });
+
+      // Bereitschaft und setupComplete zurücksetzen
+      state.setupComplete[seatIndex] = false;
+      if (state.readyToStart) state.readyToStart[seatIndex] = false;
+      state.message = `${state.players[seatIndex]} stellt Schiffe um…`;
+
+      io.to(room.code).emit("state_update", state);
+      persist();
+    });
+
+    socket.on("sv_ready", ({ code }) => {
+      const room = rooms.get(normalizeCode(code));
+      if (!room || room.status !== "running") return;
+      const state = room.state;
+      if (!state || state.gameType !== "schiffeversenken") return;
+      if (state.phase !== "setup") return socket.emit("error_msg", { message: "Die Aufbauphase ist vorbei." });
+
+      const seatIndex = getSeatIndexBySocket(room, socket.id);
+      if (seatIndex < 0) return socket.emit("error_msg", { message: "Spieler nicht gefunden." });
+      if (!state.setupComplete[seatIndex]) return socket.emit("error_msg", { message: "Platziere zuerst alle Schiffe." });
+
+      if (!state.readyToStart) state.readyToStart = [false, false];
+      state.readyToStart[seatIndex] = true;
+
       // Beide bereit? Spiel starten
-      if (state.setupComplete[0] && state.setupComplete[1]) {
+      if (state.readyToStart[0] && state.readyToStart[1]) {
         state.phase = "playing";
         state.currentPlayer = 0;
         state.message = `${state.players[0]} beginnt!`;
-      } else if (state.setupComplete[seatIndex]) {
+      } else {
         state.message = `${state.players[seatIndex]} ist bereit. Warte auf ${state.players[1 - seatIndex]}…`;
       }
 

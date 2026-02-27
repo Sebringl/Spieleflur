@@ -25,7 +25,8 @@ export function createSchiffeversenkenState(playerNames) {
     // "setup" -> "playing" -> "finished"
     phase: "setup",
     boards: [createBoard(), createBoard()],
-    setupComplete: [false, false],
+    setupComplete: [false, false],  // alle Schiffe platziert
+    readyToStart: [false, false],   // "Spiel starten" geklickt
     currentPlayer: 0, // Wer gerade schießt (wird im Setup auch genutzt für canAct-Kompatibilität)
     winner: null,
     lastShot: null,
@@ -35,12 +36,20 @@ export function createSchiffeversenkenState(playerNames) {
 }
 
 // Prüft, ob ein Schiff an dieser Position platziert werden kann.
+// Schiffe dürfen sich nicht überlappen und nicht direkt nebeneinander stehen (oben/unten/links/rechts).
+// Diagonal berühren ist erlaubt.
 export function canPlaceShip(grid, length, row, col, isVertical) {
   for (let i = 0; i < length; i++) {
     const r = isVertical ? row + i : row;
     const c = isVertical ? col : col + i;
     if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
     if (grid[r][c] !== null) return false;
+    // Direkte Nachbarzellen (oben/unten/links/rechts) dürfen kein platziertes Schiff enthalten
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && grid[nr][nc] === "ship") return false;
+    }
   }
   return true;
 }
@@ -63,6 +72,19 @@ export function placeShip(board, shipIndex, row, col, isVertical) {
   }
   ship.cells = cells;
   board.shipsPlaced++;
+  return true;
+}
+
+// Entfernt ein bereits platziertes Schiff vom Board (für Neuplatzierung).
+export function removeShip(board, shipIndex) {
+  const ship = board.ships[shipIndex];
+  if (!ship || ship.cells.length === 0) return false;
+  for (const { row: r, col: c } of ship.cells) {
+    board.grid[r][c] = null;
+  }
+  ship.cells = [];
+  ship.sunk = false;
+  board.shipsPlaced--;
   return true;
 }
 

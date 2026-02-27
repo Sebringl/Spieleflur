@@ -8,6 +8,8 @@ const SV_SHIP_NAMES = ["Schlachtschiff (4)", "Kreuzer (3)", "Kreuzer (3)", "Zers
 let svSelectedShipIndex = null;
 let svIsVertical = false;
 let svHoverCells = [];
+let svHoverValid = true;  // ob die aktuelle Hover-Position eine gültige Platzierung wäre
+let svDragState = null;   // Zieht man zum Platzieren, wird die Richtung per Drag bestimmt
 
 function svGetMyBoard() {
   if (!state || !state.boards) return null;
@@ -71,29 +73,39 @@ function renderSvSetup() {
   const myBoard = svGetMyBoard();
   if (!myBoard) return;
 
-  renderSvShipList(myBoard);
-  renderSvSetupGrid(myBoard);
+  const imReady = state.readyToStart && state.readyToStart[mySeat];
 
-  // Drehen-Button
-  const rotateBtn = document.getElementById("svRotateBtn");
-  if (rotateBtn) {
-    rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
-    rotateBtn.onclick = () => {
-      svIsVertical = !svIsVertical;
-      renderSvSetup();
-    };
-  }
-
-  // Bereits vollständig aufgebaut?
-  if (state.setupComplete && state.setupComplete[mySeat]) {
+  // Warte-Ansicht: Spieler hat "Spiel starten" geklickt
+  if (imReady) {
     const setupArea = document.getElementById("svSetupArea");
     if (setupArea) {
       setupArea.innerHTML = `<div class="sv-setup-done">
-        <p>✅ Du hast alle Schiffe platziert. Warte auf den Gegner…</p>
+        <p>✅ Du bist bereit! Warte auf ${state.players[1 - mySeat]}…</p>
         <div class="sv-grid-label" style="margin-top:10px;">Dein Spielfeld</div>
         <div id="svWaitGrid" class="sv-grid"></div>
       </div>`;
       renderSvGridReadonly("svWaitGrid", myBoard.grid, true);
+    }
+    return;
+  }
+
+  // Normale Setup-Ansicht
+  renderSvShipList(myBoard);
+  renderSvSetupGrid(myBoard);
+  svUpdateRotateBtn();
+
+  // "Spiel starten"-Button, sobald alle Schiffe platziert sind
+  const startArea = document.getElementById("svStartBtnArea");
+  if (startArea) {
+    const allPlaced = state.setupComplete && state.setupComplete[mySeat];
+    if (allPlaced) {
+      startArea.innerHTML = `<button id="svStartBtn" class="btn-primary sv-start-btn">Spiel starten ▶</button>`;
+      document.getElementById("svStartBtn").addEventListener("click", () => {
+        if (!room) return;
+        socket.emit("sv_ready", { code: room.code });
+      });
+    } else {
+      startArea.innerHTML = "";
     }
   }
 }
@@ -107,20 +119,35 @@ function renderSvShipList(board) {
     const ship = board.ships[idx];
     const placed = ship && ship.cells.length > 0;
     const selected = svSelectedShipIndex === idx;
-    html += `<li class="sv-ship-item${placed ? " sv-ship-placed" : ""}${selected ? " sv-ship-selected" : ""}" data-idx="${idx}">
+    // Platzierte Schiffe bekommen eine Neu-Setzen-Schaltfläche statt des ✓
+    const statusHtml = placed
+      ? `<span class="sv-ship-replace" title="Neu platzieren">✏️</span>`
+      : "";
+    html += `<li class="sv-ship-item${placed ? " sv-ship-placed sv-ship-replaceable" : ""}${selected ? " sv-ship-selected" : ""}" data-idx="${idx}">
       <span class="sv-ship-name">${SV_SHIP_NAMES[idx]}</span>
       <span class="sv-ship-cells">${"▪".repeat(size)}</span>
-      ${placed ? '<span class="sv-ship-status">✓</span>' : ""}
+      ${statusHtml}
     </li>`;
   });
   html += "</ul>";
   container.innerHTML = html;
 
+  // Unplatzierte Schiffe: auswählen
   container.querySelectorAll(".sv-ship-item:not(.sv-ship-placed)").forEach(li => {
     li.onclick = () => {
       const idx = Number(li.dataset.idx);
       svSelectedShipIndex = (svSelectedShipIndex === idx) ? null : idx;
       renderSvSetup();
+    };
+  });
+
+  // Platzierte Schiffe: neu setzen (entfernen + auswählen)
+  container.querySelectorAll(".sv-ship-item.sv-ship-replaceable").forEach(li => {
+    li.onclick = () => {
+      if (!room) return;
+      const idx = Number(li.dataset.idx);
+      svSelectedShipIndex = idx;
+      socket.emit("sv_remove_ship", { code: room.code, shipIndex: idx });
     };
   });
 }
@@ -142,16 +169,36 @@ function renderSvSetupGrid(board) {
         cell.classList.add("sv-cell-ship");
       }
       if (svHoverCells.some(h => h.r === r && h.c === c)) {
-        cell.classList.add("sv-cell-hover");
+        cell.classList.add(svHoverValid ? "sv-cell-hover" : "sv-cell-hover-invalid");
       }
 
+      // Maus-Hover für Desktop
       cell.addEventListener("mouseenter", () => svOnHover(r, c));
       cell.addEventListener("mouseleave", () => svClearHover());
-      cell.addEventListener("click", () => svOnSetupClick(r, c));
+      // Kein click-Listener mehr – wird über pointerup abgehandelt
 
       container.appendChild(cell);
     }
   }
+
+  // Pointer-Events (Maus + Touch) für Drag-Richtungserkennung
+  svAttachGridPointerEvents(container);
+}
+
+// Client-seitige Platzierungsprüfung (spiegelt die Server-Logik inkl. Abstandsregel)
+function svClientCanPlace(grid, length, row, col, isVertical) {
+  for (let i = 0; i < length; i++) {
+    const r = isVertical ? row + i : row;
+    const c = isVertical ? col : col + i;
+    if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
+    if (grid[r][c] !== null) return false;
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && grid[nr][nc] === "ship") return false;
+    }
+  }
+  return true;
 }
 
 function svOnHover(row, col) {
@@ -169,6 +216,7 @@ function svOnHover(row, col) {
       svHoverCells.push({ r, c });
     }
   }
+  svHoverValid = svClientCanPlace(myBoard.grid, ship.length, row, col, svIsVertical);
   renderSvSetupGrid(myBoard);
 }
 
@@ -204,6 +252,79 @@ function svOnSetupClick(row, col) {
       }
     }
   }
+}
+
+// Drehen-Button-Text aktualisieren
+function svUpdateRotateBtn() {
+  const rotateBtn = document.getElementById("svRotateBtn");
+  if (!rotateBtn) return;
+  rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
+  rotateBtn.onclick = () => {
+    svIsVertical = !svIsVertical;
+    renderSvSetup();
+  };
+}
+
+// Pointer-Events einmalig am Grid-Container registrieren.
+// Zieht man nach rechts/links → waagerecht; nach oben/unten → senkrecht.
+// Kurzes Antippen → behält die bisherige Ausrichtung.
+function svAttachGridPointerEvents(container) {
+  if (container.dataset.svListeners) return; // Nur einmal anhängen
+  container.dataset.svListeners = "1";
+
+  container.addEventListener("pointerdown", e => {
+    if (svSelectedShipIndex === null) return;
+    const cell = e.target.closest(".sv-cell");
+    if (!cell) return;
+
+    svDragState = {
+      startRow: Number(cell.dataset.row),
+      startCol: Number(cell.dataset.col),
+      startX: e.clientX,
+      startY: e.clientY,
+      isDragging: false,
+    };
+    svOnHover(svDragState.startRow, svDragState.startCol);
+  });
+
+  container.addEventListener("pointermove", e => {
+    if (!svDragState) {
+      // Touch-Hover ohne aktiven Drag: Vorschau unter dem Finger aktualisieren
+      if (e.pointerType !== "mouse") {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        if (el && el.dataset.row !== undefined) {
+          svOnHover(Number(el.dataset.row), Number(el.dataset.col));
+        }
+      }
+      return;
+    }
+
+    const dx = e.clientX - svDragState.startX;
+    const dy = e.clientY - svDragState.startY;
+
+    if (Math.sqrt(dx * dx + dy * dy) > 8) {
+      svDragState.isDragging = true;
+      // Richtung aus der Drag-Geste ableiten
+      const newIsVertical = Math.abs(dy) >= Math.abs(dx);
+      if (newIsVertical !== svIsVertical) {
+        svIsVertical = newIsVertical;
+        svUpdateRotateBtn();
+      }
+      svOnHover(svDragState.startRow, svDragState.startCol);
+    }
+  });
+
+  container.addEventListener("pointerup", e => {
+    if (!svDragState) return;
+    const { startRow, startCol } = svDragState;
+    svDragState = null;
+    svOnSetupClick(startRow, startCol);
+  });
+
+  container.addEventListener("pointercancel", () => {
+    svDragState = null;
+    svClearHover();
+  });
 }
 
 // ---- Spielphase ----
