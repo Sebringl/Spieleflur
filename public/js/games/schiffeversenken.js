@@ -423,16 +423,21 @@ function svAttachGridPointerEvents(container) {
 
   container.addEventListener("pointerup", e => {
     if (!svDragState) return;
-    const { startRow, startCol } = svDragState;
+    const { startRow, startCol, isDragging } = svDragState;
     svDragState = null;
 
-    // Kein Anker noch gesetzt → jetzt setzen (egal ob Tap oder Drag)
     if (!svPlacementAnchor) {
+      // Kein Anker gesetzt → jetzt setzen (egal ob Tap oder Drag)
       svPlacementAnchor = { row: startRow, col: startCol };
       svComputeHoverCells(startRow, startCol);
       renderSvSetup(); // Bestätigen-Button einblenden
+    } else if (!isDragging) {
+      // Anker gesetzt, kein Drag → Anker auf das angeklickte Feld verschieben
+      svPlacementAnchor = { row: startRow, col: startCol };
+      svComputeHoverCells(startRow, startCol);
+      renderSvSetup();
     }
-    // Anker bereits gesetzt → Ausrichtung wurde während Drag aktualisiert; nichts weiter tun
+    // Anker gesetzt + Drag → Ausrichtung wurde während Drag aktualisiert; nichts weiter tun
   });
 
   container.addEventListener("pointercancel", () => {
