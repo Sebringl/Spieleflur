@@ -1119,6 +1119,12 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-ship-name { font-size: 0.82rem; color: var(--color-text-muted); }
 
 .sv-setup-grid-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+/* Verhindert Scrollen beim Wischen über das Setup-Gitter */
+#svSetupGrid {
+  touch-action: none;
+  user-select: none;
+}
 .sv-grid-label {
   font-size: 0.82rem;
   font-weight: 600;

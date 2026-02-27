@@ -8,6 +8,7 @@ const SV_SHIP_NAMES = ["Schlachtschiff (4)", "Kreuzer (3)", "Kreuzer (3)", "Zers
 let svSelectedShipIndex = null;
 let svIsVertical = false;
 let svHoverCells = [];
+let svDragState = null; // Zieht man zum Platzieren, wird die Richtung per Drag bestimmt
 
 function svGetMyBoard() {
   if (!state || !state.boards) return null;
@@ -75,14 +76,7 @@ function renderSvSetup() {
   renderSvSetupGrid(myBoard);
 
   // Drehen-Button
-  const rotateBtn = document.getElementById("svRotateBtn");
-  if (rotateBtn) {
-    rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
-    rotateBtn.onclick = () => {
-      svIsVertical = !svIsVertical;
-      renderSvSetup();
-    };
-  }
+  svUpdateRotateBtn();
 
   // Bereits vollständig aufgebaut?
   if (state.setupComplete && state.setupComplete[mySeat]) {
@@ -145,13 +139,17 @@ function renderSvSetupGrid(board) {
         cell.classList.add("sv-cell-hover");
       }
 
+      // Maus-Hover für Desktop
       cell.addEventListener("mouseenter", () => svOnHover(r, c));
       cell.addEventListener("mouseleave", () => svClearHover());
-      cell.addEventListener("click", () => svOnSetupClick(r, c));
+      // Kein click-Listener mehr – wird über pointerup abgehandelt
 
       container.appendChild(cell);
     }
   }
+
+  // Pointer-Events (Maus + Touch) für Drag-Richtungserkennung
+  svAttachGridPointerEvents(container);
 }
 
 function svOnHover(row, col) {
@@ -204,6 +202,79 @@ function svOnSetupClick(row, col) {
       }
     }
   }
+}
+
+// Drehen-Button-Text aktualisieren
+function svUpdateRotateBtn() {
+  const rotateBtn = document.getElementById("svRotateBtn");
+  if (!rotateBtn) return;
+  rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
+  rotateBtn.onclick = () => {
+    svIsVertical = !svIsVertical;
+    renderSvSetup();
+  };
+}
+
+// Pointer-Events einmalig am Grid-Container registrieren.
+// Zieht man nach rechts/links → waagerecht; nach oben/unten → senkrecht.
+// Kurzes Antippen → behält die bisherige Ausrichtung.
+function svAttachGridPointerEvents(container) {
+  if (container.dataset.svListeners) return; // Nur einmal anhängen
+  container.dataset.svListeners = "1";
+
+  container.addEventListener("pointerdown", e => {
+    if (svSelectedShipIndex === null) return;
+    const cell = e.target.closest(".sv-cell");
+    if (!cell) return;
+
+    svDragState = {
+      startRow: Number(cell.dataset.row),
+      startCol: Number(cell.dataset.col),
+      startX: e.clientX,
+      startY: e.clientY,
+      isDragging: false,
+    };
+    svOnHover(svDragState.startRow, svDragState.startCol);
+  });
+
+  container.addEventListener("pointermove", e => {
+    if (!svDragState) {
+      // Touch-Hover ohne aktiven Drag: Vorschau unter dem Finger aktualisieren
+      if (e.pointerType !== "mouse") {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        if (el && el.dataset.row !== undefined) {
+          svOnHover(Number(el.dataset.row), Number(el.dataset.col));
+        }
+      }
+      return;
+    }
+
+    const dx = e.clientX - svDragState.startX;
+    const dy = e.clientY - svDragState.startY;
+
+    if (Math.sqrt(dx * dx + dy * dy) > 8) {
+      svDragState.isDragging = true;
+      // Richtung aus der Drag-Geste ableiten
+      const newIsVertical = Math.abs(dy) >= Math.abs(dx);
+      if (newIsVertical !== svIsVertical) {
+        svIsVertical = newIsVertical;
+        svUpdateRotateBtn();
+      }
+      svOnHover(svDragState.startRow, svDragState.startCol);
+    }
+  });
+
+  container.addEventListener("pointerup", e => {
+    if (!svDragState) return;
+    const { startRow, startCol } = svDragState;
+    svDragState = null;
+    svOnSetupClick(startRow, startCol);
+  });
+
+  container.addEventListener("pointercancel", () => {
+    svDragState = null;
+    svClearHover();
+  });
 }
 
 // ---- Spielphase ----
