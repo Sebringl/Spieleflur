@@ -1123,8 +1123,10 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-ship-item.sv-ship-replaceable:hover { opacity: 1; border-color: var(--color-accent); }
 .sv-ship-replace { margin-left: auto; font-size: 0.85rem; }
 
-/* Spiel-starten-Button */
+/* Spiel-starten-Button & Bestätigen-Button */
 .sv-start-btn { margin-top: 10px; width: 100%; }
+.sv-confirm-btn { margin-top: 10px; width: 100%; }
+.sv-invalid-hint { display: inline-block; margin-top: 10px; color: #ef4444; font-size: 0.85rem; }
 
 .sv-setup-grid-wrap { display: flex; flex-direction: column; gap: 6px; }
 
@@ -1141,7 +1143,6 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   letter-spacing: 0.05em;
 }
 
-.sv-rotate-btn { margin-top: 8px; }
 .sv-setup-hint { font-size: 0.82rem; color: var(--color-text-muted); max-width: 200px; }
 
 .sv-setup-done {
@@ -1197,6 +1198,12 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 .sv-cell-hover {
   background: rgba(59, 130, 246, 0.4);
   border-color: #3b82f6;
+}
+
+.sv-cell-tentative {
+  background: rgba(59, 130, 246, 0.75);
+  border-color: #1d4ed8;
+  cursor: pointer;
 }
 
 .sv-cell-hover-invalid {

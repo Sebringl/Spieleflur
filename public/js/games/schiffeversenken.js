@@ -8,8 +8,9 @@ const SV_SHIP_NAMES = ["Schlachtschiff (4)", "Kreuzer (3)", "Kreuzer (3)", "Zers
 let svSelectedShipIndex = null;
 let svIsVertical = false;
 let svHoverCells = [];
-let svHoverValid = true;  // ob die aktuelle Hover-Position eine gültige Platzierung wäre
-let svDragState = null;   // Zieht man zum Platzieren, wird die Richtung per Drag bestimmt
+let svHoverValid = true;    // ob die aktuelle Hover-Position eine gültige Platzierung wäre
+let svDragState = null;     // Zieht man zum Platzieren, wird die Richtung per Drag bestimmt
+let svPlacementAnchor = null; // { row, col } – gesetzter Fixpunkt; null wenn noch kein Ankerpunkt
 
 function svGetMyBoard() {
   if (!state || !state.boards) return null;
@@ -89,16 +90,42 @@ function renderSvSetup() {
     return;
   }
 
+  // Hinweis-Text je nach Zustand aktualisieren
+  const hintEl = document.getElementById("svHintText");
+  if (hintEl) {
+    if (svSelectedShipIndex === null) {
+      hintEl.textContent = "Schiff aus der Liste auswählen.";
+    } else if (!svPlacementAnchor) {
+      hintEl.textContent = "Auf ein Feld klicken oder in die gewünschte Richtung ziehen um das Schiff zu setzen.";
+    } else {
+      hintEl.textContent = "Ziehen um das Schiff zu drehen · Auf das Schiff klicken um es zu entfernen.";
+    }
+  }
+
   // Normale Setup-Ansicht
   renderSvShipList(myBoard);
-  renderSvSetupGrid(myBoard);
-  svUpdateRotateBtn();
 
-  // "Spiel starten"-Button, sobald alle Schiffe platziert sind
+  // Hover-Zellen aus Anker aktualisieren, wenn Anker gesetzt
+  if (svPlacementAnchor && svSelectedShipIndex !== null) {
+    svComputeHoverCells(svPlacementAnchor.row, svPlacementAnchor.col);
+  }
+
+  renderSvSetupGrid(myBoard);
+
+  // Bestätigen-Button oder "Spiel starten"-Button
   const startArea = document.getElementById("svStartBtnArea");
   if (startArea) {
     const allPlaced = state.setupComplete && state.setupComplete[mySeat];
-    if (allPlaced) {
+
+    if (svPlacementAnchor && svSelectedShipIndex !== null) {
+      // Anker gesetzt: Bestätigen-Button zeigen
+      if (svHoverValid) {
+        startArea.innerHTML = `<button id="svConfirmBtn" class="btn-primary sv-confirm-btn">✓ Schiff bestätigen</button>`;
+        document.getElementById("svConfirmBtn").addEventListener("click", svConfirmPlacement);
+      } else {
+        startArea.innerHTML = `<span class="sv-invalid-hint">Position ungültig</span>`;
+      }
+    } else if (allPlaced) {
       startArea.innerHTML = `<button id="svStartBtn" class="btn-primary sv-start-btn">Spiel starten ▶</button>`;
       document.getElementById("svStartBtn").addEventListener("click", () => {
         if (!room) return;
@@ -136,7 +163,15 @@ function renderSvShipList(board) {
   container.querySelectorAll(".sv-ship-item:not(.sv-ship-placed)").forEach(li => {
     li.onclick = () => {
       const idx = Number(li.dataset.idx);
-      svSelectedShipIndex = (svSelectedShipIndex === idx) ? null : idx;
+      if (svSelectedShipIndex === idx) {
+        svSelectedShipIndex = null;
+        svPlacementAnchor = null;
+        svHoverCells = [];
+      } else {
+        svSelectedShipIndex = idx;
+        svPlacementAnchor = null;
+        svHoverCells = [];
+      }
       renderSvSetup();
     };
   });
@@ -147,6 +182,8 @@ function renderSvShipList(board) {
       if (!room) return;
       const idx = Number(li.dataset.idx);
       svSelectedShipIndex = idx;
+      svPlacementAnchor = null;
+      svHoverCells = [];
       socket.emit("sv_remove_ship", { code: room.code, shipIndex: idx });
     };
   });
@@ -165,17 +202,33 @@ function renderSvSetupGrid(board) {
       cell.dataset.col = c;
 
       const val = board.grid[r][c];
+      const isTentative = svPlacementAnchor && svHoverCells.some(h => h.r === r && h.c === c);
+
       if (val === "ship") {
         cell.classList.add("sv-cell-ship");
-      }
-      if (svHoverCells.some(h => h.r === r && h.c === c)) {
+        // Klick auf platziertes Schiff → entfernen, Listeneintrag reaktivieren
+        cell.addEventListener("click", () => svRemoveShipAtCell(r, c, board));
+      } else if (isTentative) {
+        // Tentative Platzierung (Anker gesetzt, noch nicht bestätigt)
+        cell.classList.add(svHoverValid ? "sv-cell-tentative" : "sv-cell-hover-invalid");
+        if (svHoverValid) {
+          // Klick auf tentatives Schiff → Anker aufheben
+          cell.addEventListener("click", () => {
+            svPlacementAnchor = null;
+            svHoverCells = [];
+            renderSvSetup();
+          });
+        }
+      } else if (!svPlacementAnchor && svHoverCells.some(h => h.r === r && h.c === c)) {
+        // Normaler Hover-Preview (kein Anker gesetzt)
         cell.classList.add(svHoverValid ? "sv-cell-hover" : "sv-cell-hover-invalid");
       }
 
-      // Maus-Hover für Desktop
-      cell.addEventListener("mouseenter", () => svOnHover(r, c));
-      cell.addEventListener("mouseleave", () => svClearHover());
-      // Kein click-Listener mehr – wird über pointerup abgehandelt
+      // Maus-Hover für Desktop (nur wenn kein Anker gesetzt)
+      if (!svPlacementAnchor) {
+        cell.addEventListener("mouseenter", () => svOnHover(r, c));
+        cell.addEventListener("mouseleave", () => svClearHover());
+      }
 
       container.appendChild(cell);
     }
@@ -183,6 +236,49 @@ function renderSvSetupGrid(board) {
 
   // Pointer-Events (Maus + Touch) für Drag-Richtungserkennung
   svAttachGridPointerEvents(container);
+}
+
+// ---- Hover / Positionsberechnung ----
+
+// Nur berechnen, nicht rendern
+function svComputeHoverCells(row, col) {
+  if (svSelectedShipIndex === null) {
+    svHoverCells = [];
+    return;
+  }
+  const myBoard = svGetMyBoard();
+  if (!myBoard) return;
+  const ship = myBoard.ships[svSelectedShipIndex];
+  if (!ship || ship.cells.length > 0) {
+    svHoverCells = [];
+    return;
+  }
+
+  svHoverCells = [];
+  for (let i = 0; i < ship.length; i++) {
+    const r = svIsVertical ? row + i : row;
+    const c = svIsVertical ? col : col + i;
+    if (r >= 0 && r < 10 && c >= 0 && c < 10) {
+      svHoverCells.push({ r, c });
+    }
+  }
+  svHoverValid = svClientCanPlace(myBoard.grid, ship.length, row, col, svIsVertical);
+}
+
+// Berechnen + Grid neu rendern (für Maus-Events ohne Anker)
+function svOnHover(row, col) {
+  if (svSelectedShipIndex === null) return;
+  if (svPlacementAnchor) return; // Anker gesetzt → Position nicht per Hover ändern
+  svComputeHoverCells(row, col);
+  const myBoard = svGetMyBoard();
+  if (myBoard) renderSvSetupGrid(myBoard);
+}
+
+function svClearHover() {
+  if (svPlacementAnchor) return; // Anker gesetzt → nicht löschen
+  svHoverCells = [];
+  const myBoard = svGetMyBoard();
+  if (myBoard) renderSvSetupGrid(myBoard);
 }
 
 // Client-seitige Platzierungsprüfung (spiegelt die Server-Logik inkl. Abstandsregel)
@@ -201,42 +297,22 @@ function svClientCanPlace(grid, length, row, col, isVertical) {
   return true;
 }
 
-function svOnHover(row, col) {
-  if (svSelectedShipIndex === null) return;
-  const myBoard = svGetMyBoard();
-  if (!myBoard) return;
-  const ship = myBoard.ships[svSelectedShipIndex];
-  if (!ship || ship.cells.length > 0) return;
+// ---- Platzierung bestätigen ----
 
-  svHoverCells = [];
-  for (let i = 0; i < ship.length; i++) {
-    const r = svIsVertical ? row + i : row;
-    const c = svIsVertical ? col : col + i;
-    if (r >= 0 && r < 10 && c >= 0 && c < 10) {
-      svHoverCells.push({ r, c });
-    }
-  }
-  svHoverValid = svClientCanPlace(myBoard.grid, ship.length, row, col, svIsVertical);
-  renderSvSetupGrid(myBoard);
-}
-
-function svClearHover() {
-  svHoverCells = [];
-  const myBoard = svGetMyBoard();
-  if (myBoard) renderSvSetupGrid(myBoard);
-}
-
-function svOnSetupClick(row, col) {
-  if (svSelectedShipIndex === null) return;
+function svConfirmPlacement() {
+  if (svSelectedShipIndex === null || !svPlacementAnchor || !svHoverValid) return;
   if (!room) return;
+
   const justPlacedIndex = svSelectedShipIndex;
   socket.emit("sv_place_ship", {
     code: room.code,
     shipIndex: svSelectedShipIndex,
-    row,
-    col,
+    row: svPlacementAnchor.row,
+    col: svPlacementAnchor.col,
     isVertical: svIsVertical
   });
+
+  svPlacementAnchor = null;
   svSelectedShipIndex = null;
   svHoverCells = [];
 
@@ -254,20 +330,26 @@ function svOnSetupClick(row, col) {
   }
 }
 
-// Drehen-Button-Text aktualisieren
-function svUpdateRotateBtn() {
-  const rotateBtn = document.getElementById("svRotateBtn");
-  if (!rotateBtn) return;
-  rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
-  rotateBtn.onclick = () => {
-    svIsVertical = !svIsVertical;
-    renderSvSetup();
-  };
+// Platziertes Schiff im Grid per Klick entfernen
+function svRemoveShipAtCell(r, c, board) {
+  if (!room) return;
+  for (let i = 0; i < board.ships.length; i++) {
+    const ship = board.ships[i];
+    if (ship && ship.cells.some(cell => cell.row === r && cell.col === c)) {
+      svPlacementAnchor = null;
+      svHoverCells = [];
+      svSelectedShipIndex = i;
+      socket.emit("sv_remove_ship", { code: room.code, shipIndex: i });
+      return;
+    }
+  }
 }
 
+
 // Pointer-Events einmalig am Grid-Container registrieren.
-// Zieht man nach rechts/links → waagerecht; nach oben/unten → senkrecht.
-// Kurzes Antippen → behält die bisherige Ausrichtung.
+// Phase 1: Klick (kein Drag) → Anker setzen.
+// Phase 2: Drag vom Anker → Ausrichtung bestimmen (rechts/links = waagerecht, oben/unten = senkrecht).
+// Phase 3: "Bestätigen"-Button klicken → Schiff platzieren.
 function svAttachGridPointerEvents(container) {
   if (container.dataset.svListeners) return; // Nur einmal anhängen
   container.dataset.svListeners = "1";
@@ -277,20 +359,29 @@ function svAttachGridPointerEvents(container) {
     const cell = e.target.closest(".sv-cell");
     if (!cell) return;
 
+    const row = Number(cell.dataset.row);
+    const col = Number(cell.dataset.col);
+
     svDragState = {
-      startRow: Number(cell.dataset.row),
-      startCol: Number(cell.dataset.col),
+      startRow: row,
+      startCol: col,
       startX: e.clientX,
       startY: e.clientY,
       isDragging: false,
     };
-    svOnHover(svDragState.startRow, svDragState.startCol);
+
+    // Hover-Preview vom angeklickten Feld anzeigen (nur wenn noch kein Anker)
+    if (!svPlacementAnchor) {
+      svComputeHoverCells(row, col);
+      const myBoard = svGetMyBoard();
+      if (myBoard) renderSvSetupGrid(myBoard);
+    }
   });
 
   container.addEventListener("pointermove", e => {
     if (!svDragState) {
-      // Touch-Hover ohne aktiven Drag: Vorschau unter dem Finger aktualisieren
-      if (e.pointerType !== "mouse") {
+      // Touch-Hover ohne aktiven Drag: Vorschau unter dem Finger (nur ohne Anker)
+      if (e.pointerType !== "mouse" && !svPlacementAnchor) {
         const el = document.elementFromPoint(e.clientX, e.clientY);
         if (el && el.dataset.row !== undefined) {
           svOnHover(Number(el.dataset.row), Number(el.dataset.col));
@@ -308,9 +399,13 @@ function svAttachGridPointerEvents(container) {
       const newIsVertical = Math.abs(dy) >= Math.abs(dx);
       if (newIsVertical !== svIsVertical) {
         svIsVertical = newIsVertical;
-        svUpdateRotateBtn();
       }
-      svOnHover(svDragState.startRow, svDragState.startCol);
+      // Preview vom Anker (wenn gesetzt) oder vom Drag-Start aktualisieren
+      const anchorRow = svPlacementAnchor ? svPlacementAnchor.row : svDragState.startRow;
+      const anchorCol = svPlacementAnchor ? svPlacementAnchor.col : svDragState.startCol;
+      svComputeHoverCells(anchorRow, anchorCol);
+      const myBoard = svGetMyBoard();
+      if (myBoard) renderSvSetupGrid(myBoard);
     }
   });
 
@@ -318,12 +413,19 @@ function svAttachGridPointerEvents(container) {
     if (!svDragState) return;
     const { startRow, startCol } = svDragState;
     svDragState = null;
-    svOnSetupClick(startRow, startCol);
+
+    // Kein Anker noch gesetzt → jetzt setzen (egal ob Tap oder Drag)
+    if (!svPlacementAnchor) {
+      svPlacementAnchor = { row: startRow, col: startCol };
+      svComputeHoverCells(startRow, startCol);
+      renderSvSetup(); // Bestätigen-Button einblenden
+    }
+    // Anker bereits gesetzt → Ausrichtung wurde während Drag aktualisiert; nichts weiter tun
   });
 
   container.addEventListener("pointercancel", () => {
     svDragState = null;
-    svClearHover();
+    if (!svPlacementAnchor) svClearHover();
   });
 }
 
