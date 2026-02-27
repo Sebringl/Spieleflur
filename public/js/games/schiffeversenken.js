@@ -111,7 +111,6 @@ function renderSvSetup() {
   }
 
   renderSvSetupGrid(myBoard);
-  svUpdateRotateBtn();
 
   // Bestätigen-Button oder "Spiel starten"-Button
   const startArea = document.getElementById("svStartBtnArea");
@@ -346,20 +345,6 @@ function svRemoveShipAtCell(r, c, board) {
   }
 }
 
-// Drehen-Button-Text aktualisieren
-function svUpdateRotateBtn() {
-  const rotateBtn = document.getElementById("svRotateBtn");
-  if (!rotateBtn) return;
-  rotateBtn.textContent = svIsVertical ? "Ausrichtung: Senkrecht ↕" : "Ausrichtung: Waagerecht ↔";
-  rotateBtn.onclick = () => {
-    svIsVertical = !svIsVertical;
-    // Anker-Preview neu berechnen wenn Anker gesetzt
-    if (svPlacementAnchor && svSelectedShipIndex !== null) {
-      svComputeHoverCells(svPlacementAnchor.row, svPlacementAnchor.col);
-    }
-    renderSvSetup();
-  };
-}
 
 // Pointer-Events einmalig am Grid-Container registrieren.
 // Phase 1: Klick (kein Drag) → Anker setzen.
@@ -414,7 +399,6 @@ function svAttachGridPointerEvents(container) {
       const newIsVertical = Math.abs(dy) >= Math.abs(dx);
       if (newIsVertical !== svIsVertical) {
         svIsVertical = newIsVertical;
-        svUpdateRotateBtn();
       }
       // Preview vom Anker (wenn gesetzt) oder vom Drag-Start aktualisieren
       const anchorRow = svPlacementAnchor ? svPlacementAnchor.row : svDragState.startRow;

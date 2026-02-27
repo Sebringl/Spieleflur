@@ -1143,7 +1143,6 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   letter-spacing: 0.05em;
 }
 
-.sv-rotate-btn { margin-top: 8px; }
 .sv-setup-hint { font-size: 0.82rem; color: var(--color-text-muted); max-width: 200px; }
 
 .sv-setup-done {
