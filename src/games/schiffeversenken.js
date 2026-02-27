@@ -35,13 +35,27 @@ export function createSchiffeversenkenState(playerNames) {
   };
 }
 
+// Berechnet die Zellpositionen eines Schiffs basierend auf Ankerpunkt und Richtung.
+// direction: "right" | "left" | "down" | "up"
+function getShipCellPositions(row, col, length, direction) {
+  const cells = [];
+  for (let i = 0; i < length; i++) {
+    let r = row, c = col;
+    if (direction === "right") c = col + i;
+    else if (direction === "left") c = col - i;
+    else if (direction === "down") r = row + i;
+    else if (direction === "up") r = row - i;
+    cells.push({ row: r, col: c });
+  }
+  return cells;
+}
+
 // Prüft, ob ein Schiff an dieser Position platziert werden kann.
 // Schiffe dürfen sich nicht überlappen und nicht direkt nebeneinander stehen (oben/unten/links/rechts).
 // Diagonal berühren ist erlaubt.
-export function canPlaceShip(grid, length, row, col, isVertical) {
-  for (let i = 0; i < length; i++) {
-    const r = isVertical ? row + i : row;
-    const c = isVertical ? col : col + i;
+// direction: "right" | "left" | "down" | "up"
+export function canPlaceShip(grid, length, row, col, direction) {
+  for (const { row: r, col: c } of getShipCellPositions(row, col, length, direction)) {
     if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
     if (grid[r][c] !== null) return false;
     // Direkte Nachbarzellen (oben/unten/links/rechts) dürfen kein platziertes Schiff enthalten
@@ -56,18 +70,16 @@ export function canPlaceShip(grid, length, row, col, isVertical) {
 
 // Platziert ein Schiff auf dem Board.
 // Gibt false zurück, wenn das Schiff bereits platziert ist oder die Position ungültig ist.
-export function placeShip(board, shipIndex, row, col, isVertical) {
+// direction: "right" | "left" | "down" | "up"
+export function placeShip(board, shipIndex, row, col, direction) {
   const ship = board.ships[shipIndex];
   if (!ship) return false;
   if (ship.cells.length > 0) return false; // bereits platziert
 
-  if (!canPlaceShip(board.grid, ship.length, row, col, isVertical)) return false;
+  if (!canPlaceShip(board.grid, ship.length, row, col, direction)) return false;
 
-  const cells = [];
-  for (let i = 0; i < ship.length; i++) {
-    const r = isVertical ? row + i : row;
-    const c = isVertical ? col : col + i;
-    cells.push({ row: r, col: c });
+  const cells = getShipCellPositions(row, col, ship.length, direction);
+  for (const { row: r, col: c } of cells) {
     board.grid[r][c] = "ship";
   }
   ship.cells = cells;

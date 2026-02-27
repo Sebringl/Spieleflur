@@ -6,7 +6,7 @@ const SV_SHIP_NAMES = ["Schlachtschiff (4)", "Kreuzer (3)", "Kreuzer (3)", "Zers
 
 // Lokaler Setup-Zustand
 let svSelectedShipIndex = null;
-let svIsVertical = false;
+let svDirection = "right"; // "right" | "left" | "down" | "up"
 let svHoverCells = [];
 let svHoverValid = true;    // ob die aktuelle Hover-Position eine gültige Platzierung wäre
 let svDragState = null;     // Zieht man zum Platzieren, wird die Richtung per Drag bestimmt
@@ -240,6 +240,20 @@ function renderSvSetupGrid(board) {
 
 // ---- Hover / Positionsberechnung ----
 
+// Berechnet Zellpositionen anhand von Ankerpunkt und Richtung (client-seitig)
+function svGetCellsForDirection(row, col, length, direction) {
+  const cells = [];
+  for (let i = 0; i < length; i++) {
+    let r = row, c = col;
+    if (direction === "right") c = col + i;
+    else if (direction === "left") c = col - i;
+    else if (direction === "down") r = row + i;
+    else if (direction === "up") r = row - i;
+    cells.push({ r, c });
+  }
+  return cells;
+}
+
 // Nur berechnen, nicht rendern
 function svComputeHoverCells(row, col) {
   if (svSelectedShipIndex === null) {
@@ -254,15 +268,9 @@ function svComputeHoverCells(row, col) {
     return;
   }
 
-  svHoverCells = [];
-  for (let i = 0; i < ship.length; i++) {
-    const r = svIsVertical ? row + i : row;
-    const c = svIsVertical ? col : col + i;
-    if (r >= 0 && r < 10 && c >= 0 && c < 10) {
-      svHoverCells.push({ r, c });
-    }
-  }
-  svHoverValid = svClientCanPlace(myBoard.grid, ship.length, row, col, svIsVertical);
+  svHoverCells = svGetCellsForDirection(row, col, ship.length, svDirection)
+    .filter(({ r, c }) => r >= 0 && r < 10 && c >= 0 && c < 10);
+  svHoverValid = svClientCanPlace(myBoard.grid, ship.length, row, col, svDirection);
 }
 
 // Berechnen + Grid neu rendern (für Maus-Events ohne Anker)
@@ -282,10 +290,9 @@ function svClearHover() {
 }
 
 // Client-seitige Platzierungsprüfung (spiegelt die Server-Logik inkl. Abstandsregel)
-function svClientCanPlace(grid, length, row, col, isVertical) {
-  for (let i = 0; i < length; i++) {
-    const r = isVertical ? row + i : row;
-    const c = isVertical ? col : col + i;
+// direction: "right" | "left" | "down" | "up"
+function svClientCanPlace(grid, length, row, col, direction) {
+  for (const { r, c } of svGetCellsForDirection(row, col, length, direction)) {
     if (r < 0 || r >= 10 || c < 0 || c >= 10) return false;
     if (grid[r][c] !== null) return false;
     for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
@@ -309,7 +316,7 @@ function svConfirmPlacement() {
     shipIndex: svSelectedShipIndex,
     row: svPlacementAnchor.row,
     col: svPlacementAnchor.col,
-    isVertical: svIsVertical
+    direction: svDirection
   });
 
   svPlacementAnchor = null;
@@ -395,10 +402,15 @@ function svAttachGridPointerEvents(container) {
 
     if (Math.sqrt(dx * dx + dy * dy) > 8) {
       svDragState.isDragging = true;
-      // Richtung aus der Drag-Geste ableiten
-      const newIsVertical = Math.abs(dy) >= Math.abs(dx);
-      if (newIsVertical !== svIsVertical) {
-        svIsVertical = newIsVertical;
+      // Richtung aus der Drag-Geste ableiten (alle 4 Richtungen)
+      let newDirection;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        newDirection = dx >= 0 ? "right" : "left";
+      } else {
+        newDirection = dy >= 0 ? "down" : "up";
+      }
+      if (newDirection !== svDirection) {
+        svDirection = newDirection;
       }
       // Preview vom Anker (wenn gesetzt) oder vom Drag-Start aktualisieren
       const anchorRow = svPlacementAnchor ? svPlacementAnchor.row : svDragState.startRow;

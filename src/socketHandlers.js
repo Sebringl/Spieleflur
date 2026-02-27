@@ -874,7 +874,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
 
     // ---- Schiffe versenken ----
 
-    socket.on("sv_place_ship", ({ code, shipIndex, row, col, isVertical }) => {
+    socket.on("sv_place_ship", ({ code, shipIndex, row, col, direction }) => {
       const room = rooms.get(normalizeCode(code));
       if (!room || room.status !== "running") return;
       const state = room.state;
@@ -890,11 +890,14 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       if (idx < 0 || idx >= board.ships.length) return socket.emit("error_msg", { message: "Ungültiger Schiffsindex." });
       if (board.ships[idx].cells.length > 0) return socket.emit("error_msg", { message: "Dieses Schiff ist bereits platziert." });
 
-      if (!canPlaceShip(board.grid, board.ships[idx].length, row, col, !!isVertical)) {
+      const validDirections = ["right", "left", "down", "up"];
+      const dir = validDirections.includes(direction) ? direction : "right";
+
+      if (!canPlaceShip(board.grid, board.ships[idx].length, row, col, dir)) {
         return socket.emit("error_msg", { message: "Schiff kann dort nicht platziert werden." });
       }
 
-      placeShip(board, idx, row, col, !!isVertical);
+      placeShip(board, idx, row, col, dir);
 
       // Prüfen ob alle Schiffe platziert wurden
       const allPlaced = board.ships.every(s => s.cells.length > 0);
