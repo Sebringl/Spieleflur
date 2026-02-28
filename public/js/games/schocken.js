@@ -27,13 +27,38 @@
       const useDeckel = !!state.useDeckel;
       const wins = state.wins || [];
       const deckelCount = state.deckelCount || [];
+      const halfLossCount = state.halfLossCount || [];
 
-      let html = "<h3>Spielverlauf</h3><table>";
+      let html = "<h3>Spielverlauf</h3>";
+
+      if (useDeckel) {
+        const phase = state.deckelPhase || 1;
+        const center = state.centerCount ?? 13;
+        const inFinal = !!state.inFinal;
+        let phaseLabel;
+        if (state.deckelLoser !== null && state.deckelLoser !== undefined) {
+          phaseLabel = `Spiel beendet – ${escapeHtml(players[state.deckelLoser])} zahlt eine Runde!`;
+        } else if (inFinal) {
+          phaseLabel = `FINALE: ${(state.finalPlayers || []).map(i => escapeHtml(players[i])).join(" vs ")}`;
+        } else if (phase === 1) {
+          phaseLabel = `Phase 1: Verteilen | Mitte: ${center} Deckel`;
+        } else {
+          phaseLabel = `Phase 2: Sammeln`;
+        }
+        html += `<div style="margin-bottom:6px;font-weight:bold;">${phaseLabel}</div>`;
+      }
+
+      html += "<table>";
       html += "<tr><th rowspan='2'>Runde</th>";
       players.forEach((name, i) => {
-        const displayName = useDeckel
-          ? `${escapeHtml(name)} (${deckelCount[i] || 0})`
-          : ((wins[i] > 0) ? `${escapeHtml(name)} (${wins[i]} 👑)` : escapeHtml(name));
+        let displayName;
+        if (useDeckel) {
+          const halves = halfLossCount[i] || 0;
+          const halvesLabel = halves > 0 ? ` ${"★".repeat(halves)}` : "";
+          displayName = `${escapeHtml(name)}${halvesLabel} (${deckelCount[i] || 0})`;
+        } else {
+          displayName = (wins[i] > 0) ? `${escapeHtml(name)} (${wins[i]} 👑)` : escapeHtml(name);
+        }
         html += `<th colspan="2" style="color:${playerTextColors[i % playerTextColors.length]};">${displayName}</th>`;
       });
       html += "</tr>";
@@ -97,12 +122,14 @@
       });
       const allHeld = state.held.every(h => h);
 
+      const gameOver = state.useDeckel && state.deckelLoser !== null && state.deckelLoser !== undefined;
+
       const rollBtn = document.getElementById("rollBtn");
       rollBtn.textContent = allHeld ? "Alle Würfel gehalten" : `Würfeln (${remaining})`;
-      rollBtn.disabled = !myTurn || allHeld || remaining <= 0;
+      rollBtn.disabled = gameOver || !myTurn || allHeld || remaining <= 0;
 
       const endBtn = document.getElementById("endTurnBtn");
-      endBtn.disabled = !myTurn || state.throwCount === 0 || state.dice.includes(null) || state.convertedThisTurn;
+      endBtn.disabled = gameOver || !myTurn || state.throwCount === 0 || state.dice.includes(null) || state.convertedThisTurn;
 
       document.getElementById("turnHint").textContent = "";
       document.getElementById("backToLobbyWrap").style.display = canShowBackToLobby() ? "block" : "none";

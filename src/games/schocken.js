@@ -26,6 +26,10 @@ export function createInitialState({ useDeckel }) {
     halfLossCount: [],
     inFinal: false,
     finalPlayers: [],
+    // Deckelmodus: Phase 1 = Verteilen aus Mitte, Phase 2 = Sammeln unter Spielern
+    deckelPhase: 1,
+    centerCount: 13,
+    deckelLoser: null,
     message: "",
     roundJustEnded: false
   };
@@ -135,33 +139,67 @@ export function prepareNextRound(state) {
   const loserSeat = sortable[sortable.length - 1].playerIndex;
 
   if (state.useDeckel) {
+    // Deckelanzahl richtet sich nach dem BESTEN Wurf (Gewinner)
     let penalty;
     switch (sortable[0].tier) {
-      case 0: penalty = 1; break;
-      case 1: penalty = 2; break;
-      case 2: penalty = 3; break;
-      case 3: penalty = sortable[0].subvalue; break;
-      case 4: penalty = 13; break;
-      default: penalty = 1;
+      case 1: penalty = 2; break; // Straße
+      case 2: penalty = 3; break; // General (Pasch)
+      case 3: penalty = 4; break; // Schock
+      case 4: penalty = 4; break; // Schock Out
+      default: penalty = 1;       // normaler Wurf
     }
-    state.deckelCount[loserSeat] += penalty;
-    state.message = `Runde ${state.roundNumber} beendet. Gewinner: ${state.players[winnerSeat]} (${sortable[0].label}). Verlierer: ${state.players[loserSeat]} (+${penalty} Deckel).`;
 
-    if (state.deckelCount[loserSeat] >= 13) {
-      state.halfLossCount[loserSeat]++;
-      const halfLosers = state.halfLossCount
-        .map((c, i) => ({ c, i }))
-        .filter(x => x.c > 0)
-        .map(x => x.i);
+    if (state.deckelPhase === 1) {
+      // Phase 1: Deckel kommen aus der Mitte
+      const actual = Math.min(penalty, state.centerCount);
+      state.deckelCount[loserSeat] += actual;
+      state.centerCount -= actual;
+      state.message = `Runde ${state.roundNumber}: ${state.players[winnerSeat]} (${sortable[0].label}) gibt ${actual} Deckel aus der Mitte an ${state.players[loserSeat]}. Mitte: ${state.centerCount} Deckel.`;
+      if (state.centerCount === 0) {
+        state.deckelPhase = 2;
+        state.message += ` Alle Deckel verteilt – jetzt spielen sich die Deckel gegenseitig zu!`;
+      }
+    } else {
+      // Phase 2: Deckel wandern vom Gewinner zum Verlierer
+      const actual = Math.min(penalty, state.deckelCount[winnerSeat]);
+      state.deckelCount[winnerSeat] -= actual;
+      state.deckelCount[loserSeat] += actual;
+      state.message = `Runde ${state.roundNumber}: ${state.players[winnerSeat]} (${sortable[0].label}) gibt ${actual} Deckel an ${state.players[loserSeat]}.`;
 
-      if (halfLosers.length >= 2) {
-        state.inFinal = true;
-        state.finalPlayers = halfLosers.slice(0, 2);
-        for (const seat of state.finalPlayers) state.deckelCount[seat] = 0;
-        state.message += ` Finale gestartet: ${state.finalPlayers.map(i => state.players[i]).join(" vs ")}.`;
-      } else {
-        state.deckelCount = state.deckelCount.map(_ => 0);
-        state.message += ` Neue Halbzeit startet.`;
+      // Prüfen ob ein Spieler alle 13 Deckel hat (Halbzeit-Verlierer)
+      const halfLossPlayerSeat = order.find(seat => state.deckelCount[seat] >= 13);
+      if (halfLossPlayerSeat !== undefined) {
+        if (state.inFinal) {
+          // Finale-Verlierer → Gesamtverlierer steht fest
+          state.deckelLoser = halfLossPlayerSeat;
+          state.message += ` ${state.players[halfLossPlayerSeat]} hat alle 13 Deckel und verliert das Finale – zahlt eine Runde!`;
+        } else {
+          state.halfLossCount[halfLossPlayerSeat]++;
+          if (state.halfLossCount[halfLossPlayerSeat] >= 2) {
+            // Selber Spieler verliert beide Halbzeiten → direkter Gesamtverlierer
+            state.deckelLoser = halfLossPlayerSeat;
+            state.message += ` ${state.players[halfLossPlayerSeat]} verliert beide Halbzeiten und zahlt eine Runde!`;
+          } else {
+            const halfLosers = state.halfLossCount
+              .map((c, i) => ({ c, i }))
+              .filter(x => x.c > 0)
+              .map(x => x.i);
+            if (halfLosers.length >= 2) {
+              state.inFinal = true;
+              state.finalPlayers = halfLosers.slice(0, 2);
+              for (const seat of state.finalPlayers) state.deckelCount[seat] = 0;
+              state.centerCount = 13;
+              state.deckelPhase = 1;
+              state.message += ` ${state.players[halfLossPlayerSeat]} verliert die Halbzeit! Finale: ${state.finalPlayers.map(i => state.players[i]).join(" vs ")}.`;
+            } else {
+              // Zweite Halbzeit beginnt
+              state.deckelCount = state.deckelCount.map(_ => 0);
+              state.centerCount = 13;
+              state.deckelPhase = 1;
+              state.message += ` ${state.players[halfLossPlayerSeat]} verliert die Halbzeit! Zweite Halbzeit beginnt.`;
+            }
+          }
+        }
       }
     }
   } else {
@@ -191,6 +229,9 @@ export function initializeSchockenRoom(room) {
   state.history = [new Array(state.players.length).fill(null)];
   state.deckelCount = state.players.map(_ => 0);
   state.halfLossCount = state.players.map(_ => 0);
+  state.deckelPhase = 1;
+  state.centerCount = 13;
+  state.deckelLoser = null;
   state.startPlayerIndex = 0;
   state.playerTurnIndex = 0;
   state.currentPlayer = 0;
