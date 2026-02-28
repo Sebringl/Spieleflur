@@ -655,6 +655,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       if (state.gameType === "kniffel") {
         if (![0,1,2,3,4].includes(i) || state.finished) return;
         if (state.dice[i] === null) return socket.emit("error_msg", { message: "Bitte zuerst würfeln." });
+        if (state.throwCount >= state.maxThrowsThisRound) return;
         state.held[i] = !state.held[i];
         io.to(room.code).emit("state_update", state);
         persist();
@@ -680,6 +681,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
         persist();
         return;
       }
+      if (remainingThrows <= 0) return;
       state.held[i] = !state.held[i];
       io.to(room.code).emit("state_update", state);
       persist();

@@ -183,16 +183,16 @@
       if (kniffelSelectedCategory && (myCard[kniffelSelectedCategory] !== null && typeof myCard[kniffelSelectedCategory] !== "undefined")) {
         kniffelSelectedCategory = "";
       }
+      const remaining = state.maxThrowsThisRound - state.throwCount;
       renderDiceGroup({
         idPrefix: "kniffelDie",
         count: 5,
         values: state.dice,
         held: state.held,
         myTurn,
+        holdingEnabled: state.throwCount > 0 && remaining > 0,
         onToggle: (index) => socket.emit("action_toggle", { code: room.code, index })
       });
-
-      const remaining = state.maxThrowsThisRound - state.throwCount;
       const allHeld = state.held.every(h => h);
       const rollBtn = document.getElementById("kniffelRollBtn");
       rollBtn.textContent = allHeld ? "Alle Würfel gehalten" : `Würfeln (${remaining})`;
