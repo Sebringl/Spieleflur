@@ -633,6 +633,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
       if (state.gameType === "schwimmen" || state.gameType === "skat") {
         return socket.emit("error_msg", { message: "Diese Aktion ist hier nicht verfügbar." });
       }
+      if (state.useDeckel && state.deckelLoser !== null && state.deckelLoser !== undefined) return socket.emit("error_msg", { message: "Das Spiel ist beendet." });
       if (state.throwCount >= state.maxThrowsThisRound) return socket.emit("error_msg", { message: "Keine Würfe mehr übrig." });
       if (state.roundJustEnded) { state.message = ""; state.roundJustEnded = false; }
       state.convertedThisTurn = false;
@@ -808,6 +809,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
 
       if (state.gameType === "schwimmen") return socket.emit("error_msg", { message: "Aktion nicht verfügbar." });
       if (state.gameType === "skat") return socket.emit("error_msg", { message: "Skat nutzt eigene Aktionen." });
+      if (state.useDeckel && state.deckelLoser !== null && state.deckelLoser !== undefined) return socket.emit("error_msg", { message: "Das Spiel ist beendet." });
 
       if (state.throwCount === 0 || state.dice.includes(null)) return socket.emit("error_msg", { message: "Bitte mindestens einmal würfeln, bevor du beendest." });
       if (state.convertedThisTurn) return socket.emit("error_msg", { message: "Nach dem Drehen musst du noch einmal würfeln." });
