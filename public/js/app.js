@@ -283,14 +283,15 @@
     }
 
     // Einheitliches Rendern von Würfelreihen (Schocken/Yahtzee).
-    function renderDiceGroup({ idPrefix, count, values, held, myTurn, onToggle }) {
+    function renderDiceGroup({ idPrefix, count, values, held, myTurn, holdingEnabled = true, onToggle }) {
       for (let i = 0; i < count; i++) {
         const el = document.getElementById(`${idPrefix}${i}`);
         if (!el) continue;
         const val = values?.[i];
         el.textContent = val ? diceSymbols[val - 1] : "□";
-        el.className = "die" + (held?.[i] ? " held" : "") + (!myTurn ? " inactive" : "");
-        if (typeof onToggle === "function") {
+        const isHeld = holdingEnabled && held?.[i];
+        el.className = "die" + (isHeld ? " held" : "") + (!myTurn ? " inactive" : "");
+        if (typeof onToggle === "function" && holdingEnabled) {
           el.onclick = () => {
             if (!myTurn) return;
             onToggle(i);

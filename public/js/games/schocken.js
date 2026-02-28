@@ -85,16 +85,16 @@
       setBodyBackgroundColor(playerBgColors[colorIdx]);
 
       const myTurn = isMyTurn();
+      const remaining = state.maxThrowsThisRound - state.throwCount;
       renderDiceGroup({
         idPrefix: "die",
         count: 3,
         values: state.dice,
         held: state.held,
         myTurn,
+        holdingEnabled: state.throwCount > 0 && remaining > 0,
         onToggle: (index) => socket.emit("action_toggle", { code: room.code, index })
       });
-
-      const remaining = state.maxThrowsThisRound - state.throwCount;
       const allHeld = state.held.every(h => h);
 
       const rollBtn = document.getElementById("rollBtn");
