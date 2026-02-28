@@ -106,11 +106,16 @@ function renderSchwimmenGame() {
       document.getElementById("skatView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
-      document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
-
-      const colorIdx = state.currentPlayer % playerTextColors.length;
-      document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
-      setBodyBackgroundColor(playerBgColors[colorIdx]);
+      if (state.finished) {
+        document.getElementById("playerDisplay").textContent = state.winner ? `Sieger: ${state.winner}` : "Spiel beendet";
+        document.getElementById("playerDisplay").style.color = "";
+        setBodyBackgroundColor("");
+      } else {
+        document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
+        const colorIdx = state.currentPlayer % playerTextColors.length;
+        document.getElementById("playerDisplay").style.color = playerTextColors[colorIdx];
+        setBodyBackgroundColor(playerBgColors[colorIdx]);
+      }
 
       const myTurn = isMyTurn();
       if (!myTurn || state.finished || state.roundPending) {

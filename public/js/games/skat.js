@@ -41,7 +41,11 @@ function renderSkatGame() {
 
       const playerCount = state.players?.length || 0;
       const currentName = state.players?.[state.currentPlayer] || "-";
-      document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
+      if (state.finished) {
+        document.getElementById("playerDisplay").textContent = state.winner ? `Sieger: ${state.winner}` : "Spiel beendet";
+      } else {
+        document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;
+      }
       document.getElementById("playerDisplay").style.color = "";
       setBodyBackgroundColor("");
 

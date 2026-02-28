@@ -102,6 +102,7 @@ function finalizeKwyxTurn(io, room, persistFn) {
     state.finished = true;
     const maxScore = Math.max(...state.totals);
     const winners = state.players.filter((_, i) => state.totals[i] === maxScore);
+    state.winner = winners.join(", ");
     state.message = `Kwyx beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
     io.to(room.code).emit("state_update", state);
     persistFn();
@@ -473,6 +474,8 @@ export function registerSocketHandlers(io, rooms, persistFn) {
             const declarerWins = declarerTricks === 0;
             const nullValue = calculateSkatGameValue({ game, cards: [], hand: state.game?.hand, schneider: false, schwarz: false, ouvert: false });
             state.game.result = { declarerTricks, won: declarerWins, value: declarerWins ? nullValue : -nullValue };
+            const defenders = state.players.filter((_, i) => i !== state.declarer);
+            state.winner = declarerWins ? state.players[state.declarer] : defenders.join(", ");
             state.message = declarerWins
               ? `${state.players[state.declarer]} gewinnt Null. Wert: ${nullValue}.`
               : `${state.players[state.declarer]} verliert Null. Wert: ${nullValue}.`;
@@ -487,6 +490,8 @@ export function registerSocketHandlers(io, rooms, persistFn) {
             const cardsForValue = state.hands[state.declarer].concat(state.skatPile);
             const gameValue = calculateSkatGameValue({ game, cards: cardsForValue, hand: state.game?.hand, schneider, schwarz, ouvert: false });
             state.game.result = { declarerPoints, defendersPoints, schneider, schwarz, won: declarerWon, value: declarerWon ? gameValue : -gameValue };
+            const defenders = state.players.filter((_, i) => i !== state.declarer);
+            state.winner = declarerWon ? state.players[state.declarer] : defenders.join(", ");
             state.message = declarerWon
               ? `${state.players[state.declarer]} gewinnt (${declarerPoints} Augen). Wert: ${gameValue}.`
               : `${state.players[state.declarer]} verliert (${declarerPoints} Augen). Wert: ${gameValue}.`;
@@ -712,6 +717,7 @@ export function registerSocketHandlers(io, rooms, persistFn) {
           state.finished = true;
           const maxScore = Math.max(...state.totals);
           const winners = state.players.filter((_, i) => state.totals[i] === maxScore);
+          state.winner = winners.join(", ");
           state.message = `Yahtzee beendet. Gewinner: ${winners.join(", ")} (${maxScore} Punkte).`;
           io.to(room.code).emit("state_update", state);
           persist();

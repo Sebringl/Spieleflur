@@ -158,6 +158,7 @@ export function handleSchwimmenFeuer(state, seat) {
   if (remaining.length <= 1) {
     const winnerSeat = remaining[0];
     state.finished = true;
+    state.winner = winnerSeat !== undefined ? state.players[winnerSeat] : undefined;
     state.message = winnerSeat !== undefined
       ? `${message} Gesamtsieger: ${state.players[winnerSeat]}.`
       : message;
@@ -177,6 +178,7 @@ export function finishSchwimmenRound(state) {
   if (activeSeats.length <= 1) {
     const winnerSeat = activeSeats[0];
     state.finished = true;
+    state.winner = winnerSeat !== undefined ? state.players[winnerSeat] : undefined;
     state.message = winnerSeat !== undefined
       ? `Schwimmen beendet. Gesamtsieger: ${state.players[winnerSeat]}.`
       : "Schwimmen beendet.";
@@ -223,6 +225,7 @@ export function finishSchwimmenRound(state) {
   if (remaining.length <= 1) {
     const winnerSeat = remaining[0];
     state.finished = true;
+    state.winner = winnerSeat !== undefined ? state.players[winnerSeat] : undefined;
     state.message += winnerSeat !== undefined ? ` Gesamtsieger: ${state.players[winnerSeat]}.` : "";
     return;
   }
