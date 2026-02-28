@@ -49,6 +49,10 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
+/* html erhält dieselbe Hintergrundfarbe wie body, damit auf breiten
+   Desktops (> 980px) und unterhalb des Inhalts keine weiße Fläche erscheint */
+html:has(body.dark-mode) { background-color: #0f0f0d; }
+
 /* ---- Dark Mode ---- */
 body.dark-mode {
   --color-bg:        #0f0f0d;
@@ -87,6 +91,9 @@ html {
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Hintergrundfarbe damit keine weißen Ränder neben dem max-width Body */
+  background-color: var(--color-bg);
+  min-height: 100%;
 }
 
 body {
@@ -112,6 +119,11 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Entfernt den blauen Tap-Highlight auf iOS */
   -webkit-tap-highlight-color: transparent;
+  /* Füllt mindestens den ganzen Viewport – verhindert weißen Bereich
+     unterhalb des Inhalts in Dark Mode (dvh = Dynamic Viewport Height,
+     berücksichtigt die kollabierbare Safari-Toolbar) */
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ============================================================
@@ -302,6 +314,8 @@ hr {
   font-weight: 500;
   color: var(--color-text-muted);
   cursor: pointer;
+  /* iOS Tap-Target: mindestens 44px hoch */
+  min-height: 44px;
   transition:
     background-color var(--transition-base),
     border-color var(--transition-base),
@@ -448,6 +462,8 @@ body.dark-mode .pill.neutral { border-color: var(--color-border); }
   gap: 6px;
   margin-left: auto;
   cursor: pointer;
+  /* iOS Tap-Target */
+  min-height: 44px;
 }
 
 /* Code-Eingabe */
@@ -701,7 +717,11 @@ body.dark-mode .card.selected {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
+/* Kniffel-Scorecard und History-Tabellen brauchen Mindestbreite für viele Spalten;
+   die Schwimmen-Punktetabelle (#schwimmenScores .score-table) hat nur 2 Spalten
+   und bekommt deshalb keine Mindestbreite (überschrieben weiter unten) */
 #historyTable table, .score-table, .kwyx-points table { min-width: 520px; }
+#schwimmenScores .score-table { min-width: 0; width: auto; }
 
 #historyTable th,
 #historyTable td,
@@ -1262,6 +1282,8 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 
 .sv-cell-shootable {
   cursor: crosshair;
+  /* Kein Doppeltipp-Zoom beim Schießen auf iPhone */
+  touch-action: manipulation;
 }
 
 .sv-cell-aim {
@@ -1325,4 +1347,79 @@ body.dark-mode .sv-ship-item.sv-ship-selected {
 }
 .die.rolling {
   animation: dieRoll 300ms ease;
+}
+
+/* ============================================================
+   SKAT – MOBILE-OPTIMIERTE STEUERUNG
+   (JS generiert diese Elemente ohne feste Klassen; CSS-Targeting
+    über ID-Ketten sorgt für korrekte Darstellung auf iPhone)
+   ============================================================ */
+
+/* Reiz-Phase: Select + Reizen + Passen nebeneinander auf Desktop,
+   zentriert umgebrochen auf Mobile */
+#skatBidControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+}
+#skatBidControls select {
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+  flex-shrink: 0;
+}
+#skatBidControls button {
+  /* Kein full-width auf Mobile – kompakt im flex-container */
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+}
+
+/* Skat-Phase: Ansagen + Spielart-Auswahl */
+#skatActionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+#skatActionButtons button {
+  width: auto;
+  min-width: 120px;
+  margin: 0;
+}
+/* Das inline-generierte div mit Spielart-Labels + Selects */
+#skatActionButtons > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 0 !important;
+}
+#skatActionButtons label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+#skatActionButtons label > select,
+#skatActionButtons label > input[type="checkbox"] {
+  margin: 0;
+}
+#skatActionButtons select {
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+}
+
+/* Spielerliste im Skat */
+#skatPlayers ul {
+  padding-left: 1.2em;
+  list-style: disc;
+  text-align: left;
 }
