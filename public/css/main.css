@@ -49,6 +49,10 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
+/* html erhält dieselbe Hintergrundfarbe wie body, damit auf breiten
+   Desktops (> 980px) und unterhalb des Inhalts keine weiße Fläche erscheint */
+html:has(body.dark-mode) { background-color: #0f0f0d; }
+
 /* ---- Dark Mode ---- */
 body.dark-mode {
   --color-bg:        #0f0f0d;
@@ -79,14 +83,31 @@ body.dark-mode {
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 16px; scroll-behavior: smooth; }
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  /* Verhindert, dass iOS Safari die Viewport-Breite anhand von
+     position:fixed-Elementen berechnet (Toggle-Blank-Space-Bug) */
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Hintergrundfarbe damit keine weißen Ränder neben dem max-width Body */
+  background-color: var(--color-bg);
+  min-height: 100%;
+}
 
 body {
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.6;
   text-align: center;
+  /* Seitlicher Abstand: fluid zwischen 12px und 32px */
   padding: clamp(12px, 3vw, 32px);
+  /* Oben: immer Platz für die fixed Top-Controls (≈38px hoch, top:14px → Unterkante ~52px)
+     + safe-area-inset-top für iPhone-Notch/Dynamic Island */
+  padding-top: max(68px, calc(env(safe-area-inset-top) + 54px));
+  /* Unten: Platz für iPhone Home-Bar */
+  padding-bottom: max(clamp(12px, 3vw, 32px), env(safe-area-inset-bottom));
   max-width: 980px;
   margin: 0 auto;
   /* --page-bg wird dynamisch von app.js gesetzt (Spielerfarbe), sonst Standardfarbe */
@@ -96,6 +117,13 @@ body {
     background-color var(--transition-slow),
     color var(--transition-slow);
   -webkit-font-smoothing: antialiased;
+  /* Entfernt den blauen Tap-Highlight auf iOS */
+  -webkit-tap-highlight-color: transparent;
+  /* Füllt mindestens den ganzen Viewport – verhindert weißen Bereich
+     unterhalb des Inhalts in Dark Mode (dvh = Dynamic Viewport Height,
+     berücksichtigt die kollabierbare Safari-Toolbar) */
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ============================================================
@@ -133,6 +161,9 @@ button {
     border-color var(--transition-fast);
   white-space: nowrap;
   max-width: 100%;
+  /* iOS: verhindert Doppeltipp-Zoom, garantiert 44px Mindest-Tippfläche */
+  touch-action: manipulation;
+  min-height: 44px;
 }
 
 button:hover {
@@ -257,12 +288,15 @@ hr {
 
 .top-controls {
   position: fixed;
-  top: 14px;
-  right: 14px;
+  /* safe-area-inset-top: Notch/Dynamic Island auf iPhone berücksichtigen */
+  top: max(14px, calc(env(safe-area-inset-top) + 8px));
+  right: max(14px, env(safe-area-inset-right));
   z-index: 1000;
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Verhindert, dass der Toggle breiter als der Viewport wird */
+  max-width: calc(100vw - 28px);
 }
 
 .reload-toggle,
@@ -280,6 +314,8 @@ hr {
   font-weight: 500;
   color: var(--color-text-muted);
   cursor: pointer;
+  /* iOS Tap-Target: mindestens 44px hoch */
+  min-height: 44px;
   transition:
     background-color var(--transition-base),
     border-color var(--transition-base),
@@ -426,6 +462,8 @@ body.dark-mode .pill.neutral { border-color: var(--color-border); }
   gap: 6px;
   margin-left: auto;
   cursor: pointer;
+  /* iOS Tap-Target */
+  min-height: 44px;
 }
 
 /* Code-Eingabe */
@@ -625,6 +663,7 @@ body.dark-mode .kwyx-die.blue   { background: #0f1d2e; border-color: #1e3a5f; co
     border-color var(--transition-fast),
     box-shadow var(--transition-fast),
     transform var(--transition-fast);
+  touch-action: manipulation;
 }
 
 .card:hover:not(.inactive) {
@@ -673,8 +712,16 @@ body.dark-mode .card.selected {
   font-size: 0.82rem;
 }
 
-#historyTable, #kniffelScoreTable, .kwyx-points { overflow-x: auto; }
+#historyTable, #kniffelScoreTable, .kwyx-points {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+/* Kniffel-Scorecard und History-Tabellen brauchen Mindestbreite für viele Spalten;
+   die Schwimmen-Punktetabelle (#schwimmenScores .score-table) hat nur 2 Spalten
+   und bekommt deshalb keine Mindestbreite (überschrieben weiter unten) */
 #historyTable table, .score-table, .kwyx-points table { min-width: 520px; }
+#schwimmenScores .score-table { min-width: 0; width: auto; }
 
 #historyTable th,
 #historyTable td,
@@ -894,6 +941,7 @@ body.dark-mode .kwyx-row.blue .kwyx-cell   { color: #93c5fd; }
     box-shadow var(--transition-fast);
   box-shadow: none;
   transform: none;
+  touch-action: manipulation;
 }
 
 .kwyx-cell:hover:not(.inactive) {
@@ -983,7 +1031,12 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 }
 
 @media (max-width: 720px) {
-  body { padding: 12px 10px; }
+  /* Nur seitliche Abstände reduzieren – padding-top bleibt vom Body-Grundstil
+     (mind. 68px) erhalten, damit der Inhalt nicht hinter den Top-Controls liegt */
+  body {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
   .dice-container { gap: 6px; }
   .die { padding: 6px; }
   button { width: min(100%, 320px); margin: 4px; }
@@ -1028,6 +1081,9 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   .sv-setup-controls { justify-content: center; }
   .sv-ship-list { width: 100%; max-width: 360px; }
   .sv-setup-done { align-items: center; }
+  /* Hint unterhalb des Grids: volle Breite, zentriert, Button gut erreichbar */
+  .sv-setup-hint { max-width: min(360px, 100%); width: 100%; text-align: center; }
+  .sv-setup-grid-wrap { align-items: center; }
 }
 
 @media (max-width: 600px) {
@@ -1046,6 +1102,18 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   .theme-toggle label { display: none; }
   .reload-toggle,
   .theme-toggle { padding: 7px 10px; }
+
+  /* iOS: verhindert automatischen Zoom beim Antippen von Eingabefeldern.
+     iOS zoomt hinein, wenn font-size < 16px ist. */
+  input:not([type="checkbox"]),
+  select { font-size: 16px; }
+
+  /* Schiffe versenken: Gitter auf kleinen Geräten etwas kompakter */
+  .sv-grid { width: min(320px, 94vw); height: min(320px, 94vw); }
+
+  /* Karten-Aktionen untereinander für einfachere Bedienung */
+  .card-actions { flex-direction: column; align-items: center; }
+  .card-actions button { width: min(100%, 280px); }
 }
 
 /* ============================================================
@@ -1091,6 +1159,7 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
   background: var(--color-surface);
   transition: border-color var(--transition-fast), background var(--transition-fast);
   user-select: none;
+  touch-action: manipulation;
 }
 
 .sv-ship-item:hover:not(.sv-ship-placed) {
@@ -1213,6 +1282,8 @@ body.dark-mode .impressum-link { color: var(--color-text-muted); }
 
 .sv-cell-shootable {
   cursor: crosshair;
+  /* Kein Doppeltipp-Zoom beim Schießen auf iPhone */
+  touch-action: manipulation;
 }
 
 .sv-cell-aim {
@@ -1276,4 +1347,79 @@ body.dark-mode .sv-ship-item.sv-ship-selected {
 }
 .die.rolling {
   animation: dieRoll 300ms ease;
+}
+
+/* ============================================================
+   SKAT – MOBILE-OPTIMIERTE STEUERUNG
+   (JS generiert diese Elemente ohne feste Klassen; CSS-Targeting
+    über ID-Ketten sorgt für korrekte Darstellung auf iPhone)
+   ============================================================ */
+
+/* Reiz-Phase: Select + Reizen + Passen nebeneinander auf Desktop,
+   zentriert umgebrochen auf Mobile */
+#skatBidControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+}
+#skatBidControls select {
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+  flex-shrink: 0;
+}
+#skatBidControls button {
+  /* Kein full-width auf Mobile – kompakt im flex-container */
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+}
+
+/* Skat-Phase: Ansagen + Spielart-Auswahl */
+#skatActionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+#skatActionButtons button {
+  width: auto;
+  min-width: 120px;
+  margin: 0;
+}
+/* Das inline-generierte div mit Spielart-Labels + Selects */
+#skatActionButtons > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 0 !important;
+}
+#skatActionButtons label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+#skatActionButtons label > select,
+#skatActionButtons label > input[type="checkbox"] {
+  margin: 0;
+}
+#skatActionButtons select {
+  width: auto;
+  min-width: 90px;
+  margin: 0;
+}
+
+/* Spielerliste im Skat */
+#skatPlayers ul {
+  padding-left: 1.2em;
+  list-style: disc;
+  text-align: left;
 }

@@ -6,7 +6,12 @@
   <link rel="icon" href="/icon.png" sizes="1024x1024" type="image/png" />
   <link rel="manifest" href="/manifest.json" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- viewport-fit=cover: Seite füllt auch Notch/Dynamic Island-Bereiche;
+       ermöglicht env(safe-area-inset-*) für korrekte Abstände -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- iOS PWA: Vollbild-App, Status-Bar transparent über dem Content -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="/css/main.css" />
