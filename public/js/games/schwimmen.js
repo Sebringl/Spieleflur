@@ -104,6 +104,7 @@ function renderSchwimmenGame() {
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("schwimmenView").style.display = "block";
       document.getElementById("skatView").style.display = "none";
+      document.getElementById("schiffeversenkenView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;

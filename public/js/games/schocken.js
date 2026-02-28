@@ -75,6 +75,7 @@
       document.getElementById("schockenView").style.display = "block";
       document.getElementById("schwimmenView").style.display = "none";
       document.getElementById("skatView").style.display = "none";
+      document.getElementById("schiffeversenkenView").style.display = "none";
 
       const currentName = state.players[state.currentPlayer] || "-";
       document.getElementById("playerDisplay").textContent = `Am Zug: ${currentName}`;

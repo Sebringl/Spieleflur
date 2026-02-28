@@ -164,6 +164,7 @@
       document.getElementById("kwyxView").style.display = "none";
       document.getElementById("schwimmenView").style.display = "none";
       document.getElementById("skatView").style.display = "none";
+      document.getElementById("schiffeversenkenView").style.display = "none";
       document.getElementById("historyTable").style.display = "none";
       document.getElementById("historyTable").innerHTML = "";
 

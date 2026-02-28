@@ -36,6 +36,7 @@ function renderSkatGame() {
       document.getElementById("schockenView").style.display = "none";
       document.getElementById("schwimmenView").style.display = "none";
       document.getElementById("skatView").style.display = "block";
+      document.getElementById("schiffeversenkenView").style.display = "none";
       document.getElementById("historyTable").style.display = "none";
       document.getElementById("historyTable").innerHTML = "";
 
