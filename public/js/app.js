@@ -129,6 +129,21 @@
     let lastKwyxPlayer = null;
     let kwyxCountdownTimer = null;
 
+    // Trackt, welche Würfel-IDs gerade animieren.
+    const rollingDiceIds = new Set();
+
+    function triggerDiceRollAnimation(ids) {
+      ids.forEach(id => {
+        rollingDiceIds.add(id);
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove("rolling");
+        void el.offsetWidth; // Reflow erzwingen, damit Animation neu startet
+        el.classList.add("rolling");
+      });
+      setTimeout(() => ids.forEach(id => rollingDiceIds.delete(id)), 400);
+    }
+
     // Headergrafiken je Ansicht.
     const headerImages = {
       lobby: "/header_Lobby.png",
@@ -290,7 +305,7 @@
         const val = values?.[i];
         el.textContent = val ? diceSymbols[val - 1] : "□";
         const isHeld = holdingEnabled && held?.[i];
-        el.className = "die" + (isHeld ? " held" : "") + (!myTurn ? " inactive" : "");
+        el.className = "die" + (isHeld ? " held" : "") + (!myTurn ? " inactive" : "") + (rollingDiceIds.has(`${idPrefix}${i}`) ? " rolling" : "");
         if (typeof onToggle === "function" && holdingEnabled) {
           el.onclick = () => {
             if (!myTurn) return;
@@ -778,6 +793,8 @@
     document.getElementById("rollBtn").onclick = () => {
       if (!room) return;
       if (isKniffelGame()) return;
+      const heldArr = state?.held || [];
+      triggerDiceRollAnimation([0, 1, 2].filter(i => !heldArr[i]).map(i => `die${i}`));
       socket.emit("action_roll", { code: room.code });
     };
 
@@ -790,6 +807,8 @@
     document.getElementById("kniffelRollBtn").onclick = () => {
       if (!room) return;
       if (!isKniffelGame()) return;
+      const heldArr = state?.held || [];
+      triggerDiceRollAnimation([0, 1, 2, 3, 4].filter(i => !heldArr[i]).map(i => `kniffelDie${i}`));
       socket.emit("action_roll", { code: room.code });
     };
 
@@ -803,6 +822,7 @@
     document.getElementById("kwyxRollBtn").onclick = () => {
       if (!room) return;
       if (!isKwyxGame()) return;
+      triggerDiceRollAnimation(["kwyxDieWhite0", "kwyxDieWhite1", "kwyxDieRed", "kwyxDieYellow", "kwyxDieGreen", "kwyxDieBlue"]);
       socket.emit("action_roll", { code: room.code });
     };
 

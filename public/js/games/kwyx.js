@@ -283,6 +283,11 @@
         el.textContent = val ? diceSymbols[val - 1] : "□";
         const isColorDie = idx >= 2;
         el.classList.toggle("inactive", !isMyTurn() && isColorDie);
+        if (rollingDiceIds.has(id)) {
+          el.classList.remove("rolling");
+          void el.offsetWidth;
+          el.classList.add("rolling");
+        }
       });
 
       const myTurn = isMyTurn();
